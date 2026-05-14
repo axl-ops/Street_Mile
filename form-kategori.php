@@ -206,7 +206,7 @@
             &copy; Copyright <strong><span>Nama Sistem</span></strong>. All Rights Reserved
         </div>
         <div class="credits">
-            Designed by <a href="#">AxelIndraYudha</a>
+            Designed by <a href="#">Axel Indra Yudha</a>
         </div>
     </footer><!-- End Footer -->
 
