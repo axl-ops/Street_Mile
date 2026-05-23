@@ -1,3 +1,50 @@
+<?php
+
+session_start();
+include 'koneksi.php';
+
+// cek apakah sudah login
+if (!isset($_SESSION['login'])) {
+    header('Location: login.php');
+    exit;
+}
+
+if (isset($_POST['submit'])) {
+
+  $product_id = $_POST['product_id'];
+  $change_type = $_POST['change_type'];
+  $qty = intval($_POST['qty']);
+  $note = $_POST['note'];
+  $user_id = $_SESSION['user_id'];
+
+  // Ambil stok sekarang
+  $q = mysqli_query($conn, "SELECT stock FROM products WHERE id = '$product_id'");
+  $data = mysqli_fetch_assoc($q);
+
+  $stock_before = $data['stock'];
+
+  // Hitung stok baru
+  if ($change_type == 'ADD') {
+    $stock_after = $stock_before + $qty;
+  } else {
+    $stock_after = $stock_before - $qty;
+    if ($stock_after < 0) {
+      echo "<script>alert('Stok tidak cukup');</script>";
+      exit;
+    }
+  }
+
+  // Update stok
+  mysqli_query($conn, "UPDATE products SET stock = '$stock_after' WHERE id = '$product_id'");
+
+  // insert log
+  mysqli_query($conn, "INSERT INTO stock_logs (product_id, change_type, qty, stock_before, stock_after, note, created_by) 
+                      VALUES ('$product_id', '$change_type', '$qty', '$stock_before', '$stock_after', '$note', '$user_id')");
+
+                      header("Location: stok.php?success=1");
+                      exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -31,7 +78,11 @@
 </head>
 
 <body>
-
+<?php if (isset($_GET['success'])): ?>
+  <script>
+    alert('Stok berhasil diperbarui!');
+  </script>
+<?php endif; ?>
   <!-- ======= Header ======= -->
   <header id="header" class="header fixed-top d-flex align-items-center">
 
@@ -54,53 +105,21 @@
 
           <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
             <li class="dropdown-header">
-              <h6>Kevin Anderson</h6>
-              <span>Web Designer</span>
+              <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
+              <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
             </li>
             <li>
-              <hr class="dropdown-divider">
-            </li>
-
-            <li>
-              <a class="dropdown-item d-flex align-items-center" href="users-profile.html">
-                <i class="bi bi-person"></i>
-                <span>My Profile</span>
-              </a>
-            </li>
-            <li>
-              <hr class="dropdown-divider">
+              <hr class="dropdown-divider" />
             </li>
 
             <li>
-              <a class="dropdown-item d-flex align-items-center" href="users-profile.html">
-                <i class="bi bi-gear"></i>
-                <span>Account Settings</span>
-              </a>
-            </li>
-            <li>
-              <hr class="dropdown-divider">
-            </li>
-
-            <li>
-              <a class="dropdown-item d-flex align-items-center" href="pages-faq.html">
-                <i class="bi bi-question-circle"></i>
-                <span>Need Help?</span>
-              </a>
-            </li>
-            <li>
-              <hr class="dropdown-divider">
-            </li>
-
-            <li>
-              <a class="dropdown-item d-flex align-items-center" href="login.php">
+              <a class="dropdown-item d-flex align-items-center" href="logout.php">
                 <i class="bi bi-box-arrow-right"></i>
                 <span>Sign Out</span>
               </a>
             </li>
-
           </ul><!-- End Profile Dropdown Items -->
         </li><!-- End Profile Nav -->
-
       </ul>
     </nav><!-- End Icons Navigation -->
 
@@ -139,7 +158,7 @@
       </li><!-- End Laporan Page Nav -->
 
       <li class="nav-item">
-        <a class="nav-link collapsed" href="user.php">
+        <a class="nav-link collapsed" href="users.php">
           <i class="bi bi-people"></i>
           <span>Manajemen User</span>
         </a>
@@ -151,38 +170,97 @@
   <main id="main" class="main">
 
     <div class="pagetitle">
-      <h1>Stock Produk</h1>
+      <h1>Manajemen Stok</h1>
       <nav>
         <ol class="breadcrumb">
           <li class="breadcrumb-item"><a href="index.php">Dashboard</a></li>
-          <li class="breadcrumb-item"><a href="produk.php">Produk</a></li>
-          <li class="breadcrumb-item active">Stock</li>
+          <li class="breadcrumb-item"><a href="produk.php">Data Produk</a></li>
+          <li class="breadcrumb-item active">Manajemen Stok</li>
         </ol>
       </nav>
     </div><!-- End Page Title -->
 
     <section class="section">
       <div class="row">
+        <!-- FORM MANAJEMEN STOK -->
         <div class="col-lg-6">
-
           <div class="card">
             <div class="card-body">
-              <h5 class="card-title">Example Card</h5>
-              <p>This is an examle page with no contrnt. You can use it as a starter for your custom pages.</p>
+              <h5 class="card-title">Manajemen Stok</h5>
+              <form method="post">
+              <div class="mb-3">
+                <label class="form-label">Pilih Produk</label>
+                <select name="product_id" class="form-select" required>
+                  <option value="">-- Pilih Produk --</option>
+                  <?php
+                  include 'koneksi.php';
+                  $produk = mysqli_query($conn, "SELECT * FROM products");
+                  while ($p = mysqli_fetch_assoc($produk)) {
+                    echo "<option value='{$p['id']}'>{$p['product_name']}</option>";
+                  }
+                  ?>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Jenis Aksi</label>
+                <select name="change_type" class="form-select">
+                  <option value="ADD">Tambah Stok</option>
+                  <option value="REDUCE">Kurangi Stok</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Jumlah</label>
+                <input type="number" name="qty" class="form-control" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Catatan</label>
+                <textarea name="note" class="form-control" rows="2"></textarea>
+              </div>
+              <button type="submit" name="submit" class="btn btn-primary">Simpan Perubahan</button>
+              </form>
             </div>
           </div>
-
         </div>
 
+        <!-- RIWAYAT STOK -->
         <div class="col-lg-6">
-
           <div class="card">
             <div class="card-body">
-              <h5 class="card-title">Example Card</h5>
-              <p>This is an examle page with no contrnt. You can use it as a starter for your custom pages.</p>
+              <h5 class="card-title">Riwayat Stok</h5>
+
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th scope="col">Tanggal</th>
+                    <th scope="col">Produk</th>
+                    <th scope="col">Aksi</th>
+                    <th scope="col">Qty</th>
+                    <th scope="col">User</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php
+                  $query = mysqli_query($conn, "SELECT sl.*, p.product_name, u.name FROM stock_logs sl 
+                            JOIN products p ON sl.product_id = p.id 
+                            JOIN users u ON sl.created_by = u.id 
+                            ORDER BY sl.created_at DESC");
+                  while ($row = mysqli_fetch_assoc($query)) {
+                    $badge = $row['change_type'] == 'ADD'
+                    ? "<span class='badge bg-success'>+ (ADD)</span>"
+                    : "<span class='badge bg-danger'>- (REDUCE)</span>";
+                    echo "<tr>
+                            <td>" . date('d M Y H:i', strtotime($row['created_at'])) . "</td>
+                            <td>{$row['product_name']}</td>
+                            <td>{$badge}</td>
+                            <td>{$row['qty']}</td>
+                            <td>{$row['name']}</td>
+                          </tr>";
+                  }
+                  ?>
+                </tbody>
+              </table>
             </div>
           </div>
-
         </div>
       </div>
     </section>
@@ -195,11 +273,7 @@
       &copy; Copyright <strong><span>Street Mile</span></strong>. All Rights Reserved
     </div>
     <div class="credits">
-      <!-- All the links in the footer should remain intact. -->
-      <!-- You can delete the links only if you purchased the pro version. -->
-      <!-- Licensing information: https://bootstrapmade.com/license/ -->
-      <!-- Purchase the pro version with working PHP/AJAX contact form: https://bootstrapmade.com/nice-admin-bootstrap-admin-html-template/ -->
-      Designed by <a href="#">AxelIndraYudha</a>
+      Designed by <a href="https://www.instagram.com/axelwavehassle/">Axel Indra Yudha</a>
     </div>
   </footer><!-- End Footer -->
 

@@ -1,25 +1,30 @@
 <?php
-include "koneksi.php";
+session_start();
+include 'koneksi.php';
+
+// cek apakah sudah login
+if (!isset($_SESSION['login'])) {
+    header('Location: login.php');
+    exit;
+}
+
 
 $auto = mysqli_query($conn, "select max(product_code) as max_code from products");
 $hasil = mysqli_fetch_array($auto);
 $code = $hasil['max_code'];
-
 if ($code == NULL) {
     $urutan = 0;
 } else {
     $urutan = (int) substr($code, 1, 3);
 }
-
 $urutan++;
 $huruf = "P";
 $kd_produk = $huruf . sprintf("%03s", $urutan);
-
 if (isset($_POST['simpan'])) {
-    $nm_produk   = $_POST['nm_produk'];
-    $stok        = $_POST['stok'];
-    $min_stok    = $_POST['min_stok'];
-    $harga       = $_POST['harga'];
+    $nm_produk = $_POST['nm_produk'];
+    $stok = $_POST['stok'];
+    $min_stok = $_POST['min_stok'];
+    $harga = $_POST['harga'];
     $id_kategori = $_POST['id_kategori'];
 
     // Upload Gambar
@@ -33,20 +38,15 @@ if (isset($_POST['simpan'])) {
     if (!in_array($extension, $allowed_extensions)) {
         echo "<script>alert('Format tidak valid. Hanya jpg, jpeg, png, dan webp yang diperbolehkan.');</script>";
     } else {
-
         $imgnewfile = md5(time() . $imgfile) . "." . $extension;
         move_uploaded_file($tmp_file, $dir . $imgnewfile);
 
-        $query = mysqli_query($conn, "INSERT INTO products 
-        (category_id, product_code, product_name, stock, min_stock, price, gambar) 
-        VALUES 
-        ('$id_kategori', '$kd_produk', '$nm_produk', '$stok', '$min_stok', '$harga', '$imgnewfile')");
-
+        $query = mysqli_query($conn, "INSERT INTO products(category_id, product_code, product_name, stock, min_stock, price, gambar) VALUES ('$id_kategori', '$kd_produk', '$nm_produk', '$stok', '$min_stok', '$harga', '$imgnewfile')");
         if ($query) {
-            echo "<script>alert('Produk berhasil ditambahkan!');</script>";
+            echo "<script>alert('Produk berhasil ditambahkan!')</script>";
             header("refresh:0, produk.php");
         } else {
-            echo "<script>alert('Gagal menambahkan produk!');</script>";
+            echo "<script>alert('Produk gagal ditambahkan!')</script>";
             header("refresh:0, produk.php");
         }
     }
@@ -59,7 +59,7 @@ if (isset($_POST['simpan'])) {
     <meta charset="utf-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
 
-    <title>Data Produk - Street Mile</title>
+    <title>Produk - Street Mile</title>
     <meta content="" name="description">
     <meta content="" name="keywords">
 
@@ -82,84 +82,52 @@ if (isset($_POST['simpan'])) {
 
     <!-- Template Main CSS File -->
     <link href="assets/css/style.css" rel="stylesheet">
+
 </head>
 
 <body>
 
-    <!-- ======= Header ======= -->
-    <header id="header" class="header fixed-top d-flex align-items-center">
+  <!-- ======= Header ======= -->
+  <header id="header" class="header fixed-top d-flex align-items-center">
 
-        <div class="d-flex align-items-center justify-content-between">
-            <a href="index.php" class="logo d-flex align-items-center">
-                <img src="assets/img/logo.png" alt="">
-                <span class="d-none d-lg-block">Street Mile</span>
-            </a>
-            <i class="bi bi-list toggle-sidebar-btn"></i>
-        </div><!-- End Logo -->
+    <div class="d-flex align-items-center justify-content-between">
+      <a href="index.php" class="logo d-flex align-items-center">
+        <img src="assets/img/logo.png" alt="">
+        <span class="d-none d-lg-block">Street Mile</span>
+      </a>
+      <i class="bi bi-list toggle-sidebar-btn"></i>
+    </div><!-- End Logo -->
 
 
-        <nav class="header-nav ms-auto">
-            <ul class="d-flex align-items-center">
+    <nav class="header-nav ms-auto">
+      <ul class="d-flex align-items-center">
+        <li class="nav-item dropdown pe-3">
 
-                <li class="nav-item dropdown pe-3">
+          <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
+            <img src="assets/img/profile-img.jpg" alt="Profile" class="rounded-circle">
+          </a><!-- End Profile Iamge Icon -->
 
-                    <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-                        <img src="assets/img/profile-img.jpg" alt="Profile" class="rounded-circle">
-                    </a><!-- End Profile Iamge Icon -->
+          <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
+            <li class="dropdown-header">
+              <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
+              <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
+            </li>
+            <li>
+              <hr class="dropdown-divider" />
+            </li>
 
-                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
-                        <li class="dropdown-header">
-                            <h6>Kevin Anderson</h6>
-                            <span>Web Designer</span>
-                        </li>
-                        <li>
-                            <hr class="dropdown-divider">
-                        </li>
+            <li>
+              <a class="dropdown-item d-flex align-items-center" href="logout.php">
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Sign Out</span>
+              </a>
+            </li>
+          </ul><!-- End Profile Dropdown Items -->
+        </li><!-- End Profile Nav -->
+      </ul>
+    </nav><!-- End Icons Navigation -->
 
-                        <li>
-                            <a class="dropdown-item d-flex align-items-center" href="users-profile.html">
-                                <i class="bi bi-person"></i>
-                                <span>My Profile</span>
-                            </a>
-                        </li>
-                        <li>
-                            <hr class="dropdown-divider">
-                        </li>
-
-                        <li>
-                            <a class="dropdown-item d-flex align-items-center" href="users-profile.html">
-                                <i class="bi bi-gear"></i>
-                                <span>Account Settings</span>
-                            </a>
-                        </li>
-                        <li>
-                            <hr class="dropdown-divider">
-                        </li>
-
-                        <li>
-                            <a class="dropdown-item d-flex align-items-center" href="pages-faq.html">
-                                <i class="bi bi-question-circle"></i>
-                                <span>Need Help?</span>
-                            </a>
-                        </li>
-                        <li>
-                            <hr class="dropdown-divider">
-                        </li>
-
-                        <li>
-                            <a class="dropdown-item d-flex align-items-center" href="#">
-                                <i class="bi bi-box-arrow-right"></i>
-                                <span>Sign Out</span>
-                            </a>
-                        </li>
-
-                    </ul><!-- End Profile Dropdown Items -->
-                </li><!-- End Profile Nav -->
-
-            </ul>
-        </nav><!-- End Icons Navigation -->
-
-    </header><!-- End Header -->
+  </header><!-- End Header -->
 
     <!-- ======= Sidebar ======= -->
     <aside id="sidebar" class="sidebar">
@@ -167,7 +135,7 @@ if (isset($_POST['simpan'])) {
         <ul class="sidebar-nav" id="sidebar-nav">
 
             <li class="nav-item">
-                <a class="nav-link " href="index.php">
+                <a class="nav-link collapsed" href="index.php">
                     <i class="bi bi-grid"></i>
                     <span>Dashboard</span>
                 </a>
@@ -175,28 +143,28 @@ if (isset($_POST['simpan'])) {
 
             <li class="nav-item">
                 <a class="nav-link collapsed" href="kategori_produk.php">
-                    <i class="bi bi-person"></i>
+                    <i class="bi bi-tags"></i>
                     <span>Kategori Produk</span>
                 </a>
             </li><!-- End Profile Page Nav -->
 
             <li class="nav-item">
-                <a class="nav-link collapsed" href="produk.php">
-                    <i class="bi bi-question-circle"></i>
+                <a class="nav-link " href="produk.php">
+                    <i class="bi bi-box-seam"></i>
                     <span>Data Produk</span>
                 </a>
             </li><!-- End F.A.Q Page Nav -->
 
             <li class="nav-item">
                 <a class="nav-link collapsed" href="laporan.php">
-                    <i class="bi bi-envelope"></i>
+                    <i class="bi bi-bar-chart-line"></i>
                     <span>Laporan</span>
                 </a>
             </li><!-- End Contact Page Nav -->
 
             <li class="nav-item">
                 <a class="nav-link collapsed" href="users.php">
-                    <i class="bi bi-card-list"></i>
+                    <i class="bi bi-people"></i>
                     <span>Manajemen User</span>
                 </a>
             </li><!-- End Register Page Nav -->
@@ -211,28 +179,27 @@ if (isset($_POST['simpan'])) {
             <nav>
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="index.php">Dashboard</a></li>
-                    <li class="breadcrumb-item">Data Produk</li>
+                    <li class="breadcrumb-item"><a href="produk.php">Data Produk</a></li>
                     <li class="breadcrumb-item active">Tambah</li>
                 </ol>
             </nav>
         </div><!-- End Page Title -->
         <section class="section">
             <div class="row">
-
                 <div class="col-lg-6">
 
                     <div class="card">
                         <div class="card-body">
-                            <h5 class="card-title">Tambah Data Produk</h5>
+                            <h5 class="card-title">Tambah Produk</h5>
 
                             <!-- Vertical Form -->
                             <form class="row g-3" method="post" enctype="multipart/form-data">
                                 <div class="col-12">
                                     <label for="kd_produk" class="form-label">Kode Produk</label>
-                                    <input type="text" class="form-control" id="kd_produk" name="kd_produk" value="<?php echo $kd_produk; ?>" readonly>
+                                    <input type="text" class="form-control" id="kd_produk" name="kd_produk" value="<?php echo $kd_produk?>" readonly>
                                 </div>
                                 <div class="col-12">
-                                    <label for="nm_produk" class="form-label">Nama Produk</label>
+                                    <label for="nm_produk" class="form-label">Nama produk</label>
                                     <input type="text" class="form-control" id="nm_produk" name="nm_produk" required>
                                 </div>
                                 <div class="col-12">
@@ -262,37 +229,32 @@ if (isset($_POST['simpan'])) {
                                 </div>
                                 <div class="col-12">
                                     <label for="gambar" class="form-label">Gambar Produk</label>
-                                    <input type="file" class="form-control" id="gambar" name="gambar" accept="image/*">
+                                    <input type="file" class="form-control" id="gambar" name="gambar" accept="image/*" required>
                                 </div>
                                 <div class="text-center">
-                                    <button type="button" class="btn btn-warning"><a href="produk.php" style="color: black; text-decoration:none;">Kembali</a></button>
-                                    <button type="reset" class="btn btn-secondary">Reset</button>
-                                    <button type="submit" class="btn btn-success" name="simpan">Simpan</button>
+                                <button type="button" class="btn btn-warning"><a href="kategori_produk.php" style="color: black; text-decoration:none;">Kembali</a></button>
+                                <button type="reset" class="btn btn-secondary">Reset</button>
+                                <button type="submit" class="btn btn-success" name="simpan">Simpan</button>
                                 </div>
-                            </form>
+                            </form><!-- Vertical Form -->
 
                         </div>
                     </div>
-
                 </div>
             </div>
         </section>
 
     </main><!-- End #main -->
 
-    <!-- ======= Footer ======= -->
-    <footer id="footer" class="footer">
-        <div class="copyright">
-            &copy; Copyright <strong><span>Street Mile</span></strong>. All Rights Reserved
-        </div>
-        <div class="credits">
-            <!-- All the links in the footer should remain intact. -->
-            <!-- You can delete the links only if you purchased the pro version. -->
-            <!-- Licensing information: https://bootstrapmade.com/license/ -->
-            <!-- Purchase the pro version with working PHP/AJAX contact form: https://bootstrapmade.com/nice-admin-bootstrap-admin-html-template/ -->
-            Designed by <a href="https://bootstrapmade.com/">Axel Indra Yudha</a>
-        </div>
-    </footer><!-- End Footer -->
+  <!-- ======= Footer ======= -->
+  <footer id="footer" class="footer">
+    <div class="copyright">
+      &copy; Copyright <strong><span>Street Mile</span></strong>. All Rights Reserved
+    </div>
+    <div class="credits">
+      Designed by <a href="https://www.instagram.com/axelwavehassle/">Axel Indra Yudha</a>
+    </div>
+  </footer><!-- End Footer -->
 
     <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
 
