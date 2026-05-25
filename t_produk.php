@@ -8,24 +8,28 @@ if (!isset($_SESSION['login'])) {
     exit;
 }
 
-
 $auto = mysqli_query($conn, "select max(product_code) as max_code from products");
 $hasil = mysqli_fetch_array($auto);
 $code = $hasil['max_code'];
+
 if ($code == NULL) {
     $urutan = 0;
 } else {
     $urutan = (int) substr($code, 1, 3);
 }
+
 $urutan++;
 $huruf = "P";
 $kd_produk = $huruf . sprintf("%03s", $urutan);
+
 if (isset($_POST['simpan'])) {
-    $nm_produk = $_POST['nm_produk'];
-    $stok = $_POST['stok'];
-    $min_stok = $_POST['min_stok'];
-    $harga = $_POST['harga'];
-    $id_kategori = $_POST['id_kategori'];
+
+    // Perbaikan anti error SQL
+    $nm_produk   = mysqli_real_escape_string($conn, $_POST['nm_produk']);
+    $stok        = mysqli_real_escape_string($conn, $_POST['stok']);
+    $min_stok    = mysqli_real_escape_string($conn, $_POST['min_stok']);
+    $harga       = mysqli_real_escape_string($conn, $_POST['harga']);
+    $id_kategori = mysqli_real_escape_string($conn, $_POST['id_kategori']);
 
     // Upload Gambar
     $imgfile = $_FILES['gambar']['name'];
@@ -36,18 +40,32 @@ if (isset($_POST['simpan'])) {
     $allowed_extensions = array("jpg", "jpeg", "png", "webp");
 
     if (!in_array($extension, $allowed_extensions)) {
+
         echo "<script>alert('Format tidak valid. Hanya jpg, jpeg, png, dan webp yang diperbolehkan.');</script>";
+
     } else {
+
         $imgnewfile = md5(time() . $imgfile) . "." . $extension;
+
         move_uploaded_file($tmp_file, $dir . $imgnewfile);
 
-        $query = mysqli_query($conn, "INSERT INTO products(category_id, product_code, product_name, stock, min_stock, price, gambar) VALUES ('$id_kategori', '$kd_produk', '$nm_produk', '$stok', '$min_stok', '$harga', '$imgnewfile')");
+        $query = mysqli_query($conn, "
+            INSERT INTO products
+            (category_id, product_code, product_name, stock, min_stock, price, gambar)
+
+            VALUES
+            ('$id_kategori', '$kd_produk', '$nm_produk', '$stok', '$min_stok', '$harga', '$imgnewfile')
+        ");
+
         if ($query) {
+
             echo "<script>alert('Produk berhasil ditambahkan!')</script>";
             header("refresh:0, produk.php");
+
         } else {
-            echo "<script>alert('Produk gagal ditambahkan!')</script>";
-            header("refresh:0, produk.php");
+
+            die(mysqli_error($conn));
+
         }
     }
 }
@@ -96,8 +114,7 @@ if (isset($_POST['simpan'])) {
         <span class="d-none d-lg-block">Street Mile</span>
       </a>
       <i class="bi bi-list toggle-sidebar-btn"></i>
-    </div><!-- End Logo -->
-
+    </div>
 
     <nav class="header-nav ms-auto">
       <ul class="d-flex align-items-center">
@@ -105,13 +122,14 @@ if (isset($_POST['simpan'])) {
 
           <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
             <img src="assets/img/profile-img.jpg" alt="Profile" class="rounded-circle">
-          </a><!-- End Profile Iamge Icon -->
+          </a>
 
           <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
             <li class="dropdown-header">
               <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
               <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
             </li>
+
             <li>
               <hr class="dropdown-divider" />
             </li>
@@ -122,12 +140,13 @@ if (isset($_POST['simpan'])) {
                 <span>Sign Out</span>
               </a>
             </li>
-          </ul><!-- End Profile Dropdown Items -->
-        </li><!-- End Profile Nav -->
-      </ul>
-    </nav><!-- End Icons Navigation -->
+          </ul>
 
-  </header><!-- End Header -->
+        </li>
+      </ul>
+    </nav>
+
+  </header>
 
     <!-- ======= Sidebar ======= -->
     <aside id="sidebar" class="sidebar">
@@ -139,43 +158,45 @@ if (isset($_POST['simpan'])) {
                     <i class="bi bi-grid"></i>
                     <span>Dashboard</span>
                 </a>
-            </li><!-- End Dashboard Nav -->
+            </li>
 
             <li class="nav-item">
                 <a class="nav-link collapsed" href="kategori_produk.php">
                     <i class="bi bi-tags"></i>
                     <span>Kategori Produk</span>
                 </a>
-            </li><!-- End Profile Page Nav -->
+            </li>
 
             <li class="nav-item">
                 <a class="nav-link " href="produk.php">
                     <i class="bi bi-box-seam"></i>
                     <span>Data Produk</span>
                 </a>
-            </li><!-- End F.A.Q Page Nav -->
+            </li>
 
             <li class="nav-item">
                 <a class="nav-link collapsed" href="laporan.php">
                     <i class="bi bi-bar-chart-line"></i>
                     <span>Laporan</span>
                 </a>
-            </li><!-- End Contact Page Nav -->
+            </li>
 
             <li class="nav-item">
                 <a class="nav-link collapsed" href="users.php">
                     <i class="bi bi-people"></i>
                     <span>Manajemen User</span>
                 </a>
-            </li><!-- End Register Page Nav -->
+            </li>
+
         </ul>
 
-    </aside><!-- End Sidebar-->
+    </aside>
 
     <main id="main" class="main">
 
         <div class="pagetitle">
             <h1>Data Produk</h1>
+
             <nav>
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="index.php">Dashboard</a></li>
@@ -183,60 +204,83 @@ if (isset($_POST['simpan'])) {
                     <li class="breadcrumb-item active">Tambah</li>
                 </ol>
             </nav>
-        </div><!-- End Page Title -->
+        </div>
+
         <section class="section">
             <div class="row">
                 <div class="col-lg-6">
 
                     <div class="card">
                         <div class="card-body">
+
                             <h5 class="card-title">Tambah Produk</h5>
 
                             <!-- Vertical Form -->
                             <form class="row g-3" method="post" enctype="multipart/form-data">
+
                                 <div class="col-12">
                                     <label for="kd_produk" class="form-label">Kode Produk</label>
-                                    <input type="text" class="form-control" id="kd_produk" name="kd_produk" value="<?php echo $kd_produk?>" readonly>
+                                    <input type="text" class="form-control" id="kd_produk" name="kd_produk" value="<?php echo $kd_produk ?>" readonly>
                                 </div>
+
                                 <div class="col-12">
                                     <label for="nm_produk" class="form-label">Nama produk</label>
                                     <input type="text" class="form-control" id="nm_produk" name="nm_produk" required>
                                 </div>
+
                                 <div class="col-12">
                                     <label for="stok" class="form-label">Stok</label>
                                     <input type="number" class="form-control" id="stok" name="stok" required>
                                 </div>
+
                                 <div class="col-12">
                                     <label for="min_stok" class="form-label">Minimal Stok</label>
                                     <input type="number" class="form-control" id="min_stok" name="min_stok" required>
                                 </div>
+
                                 <div class="col-12">
                                     <label for="harga" class="form-label">Harga</label>
                                     <input type="number" class="form-control" id="harga" name="harga" required>
                                 </div>
+
                                 <div class="col-12">
                                     <label for="id_kategori" class="form-label">Kategori</label>
+
                                     <select class="form-control" id="id_kategori" name="id_kategori" required>
+
                                         <option value="">-- Pilih Kategori --</option>
+
                                         <?php
                                         include "koneksi.php";
+
                                         $query = mysqli_query($conn, "SELECT * FROM categories");
+
                                         while ($kategori = mysqli_fetch_array($query)) {
                                             echo "<option value='{$kategori['id']}'>{$kategori['category_name']}</option>";
                                         }
                                         ?>
+
                                     </select>
                                 </div>
+
                                 <div class="col-12">
                                     <label for="gambar" class="form-label">Gambar Produk</label>
                                     <input type="file" class="form-control" id="gambar" name="gambar" accept="image/*" required>
                                 </div>
+
                                 <div class="text-center">
-                                <button type="button" class="btn btn-warning"><a href="kategori_produk.php" style="color: black; text-decoration:none;">Kembali</a></button>
-                                <button type="reset" class="btn btn-secondary">Reset</button>
-                                <button type="submit" class="btn btn-success" name="simpan">Simpan</button>
+
+                                    <button type="button" class="btn btn-warning">
+                                        <a href="kategori_produk.php" style="color: black; text-decoration:none;">Kembali</a>
+                                    </button>
+
+                                    <button type="reset" class="btn btn-secondary">Reset</button>
+
+                                    <button type="submit" class="btn btn-success" name="simpan">Simpan</button>
+
                                 </div>
-                            </form><!-- Vertical Form -->
+
+                            </form>
 
                         </div>
                     </div>
@@ -244,19 +288,24 @@ if (isset($_POST['simpan'])) {
             </div>
         </section>
 
-    </main><!-- End #main -->
+    </main>
 
   <!-- ======= Footer ======= -->
   <footer id="footer" class="footer">
+
     <div class="copyright">
       &copy; Copyright <strong><span>Street Mile</span></strong>. All Rights Reserved
     </div>
+
     <div class="credits">
       Designed by <a href="https://www.instagram.com/axelwavehassle/">Axel Indra Yudha</a>
     </div>
-  </footer><!-- End Footer -->
 
-    <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
+  </footer>
+
+    <a href="#" class="back-to-top d-flex align-items-center justify-content-center">
+        <i class="bi bi-arrow-up-short"></i>
+    </a>
 
     <!-- Vendor JS Files -->
     <script src="assets/vendor/apexcharts/apexcharts.min.js"></script>
