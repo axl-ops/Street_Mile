@@ -3,8 +3,8 @@ session_start();
 
 // cek apakah sudah login
 if (!isset($_SESSION['login'])) {
-  header('Location: login.php');
-  exit;
+    header('Location: login.php');
+    exit;
 }
 ?>
 <?php
@@ -211,7 +211,7 @@ if (isset($_POST['simpan'])) {
             <!-- You can delete the links only if you purchased the pro version. -->
             <!-- Licensing information: https://bootstrapmade.com/license/ -->
             <!-- Purchase the pro version with working PHP/AJAX contact form: https://bootstrapmade.com/nice-admin-bootstrap-admin-html-template/ -->
-            Designed by <a href="https://bootstrapmade.com/">Axel Indra Yudha</a>
+            Designed by <a href="https://www.instagram.com/axelwavehassle/">Axel Indra Yudha</a>
         </div>
     </footer><!-- End Footer -->
 

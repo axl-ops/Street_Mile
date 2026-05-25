@@ -212,7 +212,7 @@ if (!isset($_SESSION['login'])) {
   <!-- ======= Footer ======= -->
   <footer id="footer" class="footer">
     <div class="copyright">
-      &copy; Copyright <strong><span>InvAdmin</span></strong>. All Rights Reserved
+      &copy; Copyright <strong><span>Street Mile</span></strong>. All Rights Reserved
     </div>
     <div class="credits">
       Designed by <a href="https://www.instagram.com/axelwavehassle/">axelindrayudha</a>
