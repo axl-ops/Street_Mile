@@ -1,10 +1,47 @@
 <?php
 session_start();
-include 'koneksi.php';
 
-// cek apakah sudah login
-if (!isset($_SESSION['login'])) {
-    header('Location: login.php');
+require_once 'koneksi.php';
+
+// SECURITY HEADER
+header("X-Frame-Options: SAMEORIGIN");
+header("X-Content-Type-Options: nosniff");
+header("Referrer-Policy: strict-origin-when-cross-origin");
+
+// CEK LOGIN
+if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
+
+    session_unset();
+    session_destroy();
+
+    header("Location: login.php");
+    exit;
+}
+
+// SESSION TIMEOUT
+$timeout = 1800;
+
+if (isset($_SESSION['last_activity'])) {
+
+    if ((time() - $_SESSION['last_activity']) > $timeout) {
+
+        session_unset();
+        session_destroy();
+
+        header("Location: login.php?timeout=1");
+        exit;
+    }
+}
+
+$_SESSION['last_activity'] = time();
+
+// VALIDASI USER ID
+if (!isset($_SESSION['user_id'])) {
+
+    session_unset();
+    session_destroy();
+
+    header("Location: login.php");
     exit;
 }
 
@@ -42,7 +79,6 @@ if (isset($_POST['simpan'])) {
     if (!in_array($extension, $allowed_extensions)) {
 
         echo "<script>alert('Format tidak valid. Hanya jpg, jpeg, png, dan webp yang diperbolehkan.');</script>";
-
     } else {
 
         $imgnewfile = md5(time() . $imgfile) . "." . $extension;
@@ -61,11 +97,9 @@ if (isset($_POST['simpan'])) {
 
             echo "<script>alert('Produk berhasil ditambahkan!')</script>";
             header("refresh:0, produk.php");
-
         } else {
 
             die(mysqli_error($conn));
-
         }
     }
 }
@@ -82,7 +116,7 @@ if (isset($_POST['simpan'])) {
     <meta content="" name="keywords">
 
     <!-- Favicons -->
-    <link href="assets/img/favicon.png" rel="icon">
+    <link href="assets/img/Street Mile Logo.png" rel="icon">
     <link href="assets/img/apple-touch-icon.png" rel="apple-touch-icon">
 
     <!-- Google Fonts -->
@@ -105,48 +139,48 @@ if (isset($_POST['simpan'])) {
 
 <body>
 
-  <!-- ======= Header ======= -->
-  <header id="header" class="header fixed-top d-flex align-items-center">
+    <!-- ======= Header ======= -->
+    <header id="header" class="header fixed-top d-flex align-items-center">
 
-    <div class="d-flex align-items-center justify-content-between">
-      <a href="index.php" class="logo d-flex align-items-center">
-        <img src="assets/img/logo.png" alt="">
-        <span class="d-none d-lg-block">Street Mile</span>
-      </a>
-      <i class="bi bi-list toggle-sidebar-btn"></i>
-    </div>
+        <div class="d-flex align-items-center justify-content-between">
+            <a href="index.php" class="logo d-flex align-items-center">
+                <img src="assets/img/Street Mile Logo.png" alt="">
+                <span class="d-none d-lg-block">Street Mile</span>
+            </a>
+            <i class="bi bi-list toggle-sidebar-btn"></i>
+        </div>
 
-    <nav class="header-nav ms-auto">
-      <ul class="d-flex align-items-center">
-        <li class="nav-item dropdown pe-3">
+        <nav class="header-nav ms-auto">
+            <ul class="d-flex align-items-center">
+                <li class="nav-item dropdown pe-3">
 
-          <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-            <img src="assets/img/profile-img.jpg" alt="Profile" class="rounded-circle">
-          </a>
+                    <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
+                        <img src="assets/img/Profile1.png" alt="Profile" class="rounded-circle">
+                    </a>
 
-          <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
-            <li class="dropdown-header">
-              <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
-              <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
-            </li>
+                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
+                        <li class="dropdown-header">
+                            <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
+                            <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
+                        </li>
 
-            <li>
-              <hr class="dropdown-divider" />
-            </li>
+                        <li>
+                            <hr class="dropdown-divider" />
+                        </li>
 
-            <li>
-              <a class="dropdown-item d-flex align-items-center" href="logout.php">
-                <i class="bi bi-box-arrow-right"></i>
-                <span>Sign Out</span>
-              </a>
-            </li>
-          </ul>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center" href="logout.php">
+                                <i class="bi bi-box-arrow-right"></i>
+                                <span>Sign Out</span>
+                            </a>
+                        </li>
+                    </ul>
 
-        </li>
-      </ul>
-    </nav>
+                </li>
+            </ul>
+        </nav>
 
-  </header>
+    </header>
 
     <!-- ======= Sidebar ======= -->
     <aside id="sidebar" class="sidebar">
@@ -290,18 +324,18 @@ if (isset($_POST['simpan'])) {
 
     </main>
 
-  <!-- ======= Footer ======= -->
-  <footer id="footer" class="footer">
+    <!-- ======= Footer ======= -->
+    <footer id="footer" class="footer">
 
-    <div class="copyright">
-      &copy; Copyright <strong><span>Street Mile</span></strong>. All Rights Reserved
-    </div>
+        <div class="copyright">
+            &copy; Copyright <strong><span>Street Mile</span></strong>. All Rights Reserved
+        </div>
 
-    <div class="credits">
-      Designed by <a href="https://www.instagram.com/axelwavehassle/">Axel Indra Yudha</a>
-    </div>
+        <div class="credits">
+            Designed by <a href="https://www.instagram.com/axelwavehassle/">Axel Indra Yudha</a>
+        </div>
 
-  </footer>
+    </footer>
 
     <a href="#" class="back-to-top d-flex align-items-center justify-content-center">
         <i class="bi bi-arrow-up-short"></i>

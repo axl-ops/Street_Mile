@@ -1,10 +1,48 @@
 <?php
 session_start();
 
-// cek apakah sudah login
-if (!isset($_SESSION['login'])) {
-  header('Location: login.php');
-  exit;
+require_once 'koneksi.php';
+
+// SECURITY HEADER
+header("X-Frame-Options: SAMEORIGIN");
+header("X-Content-Type-Options: nosniff");
+header("Referrer-Policy: strict-origin-when-cross-origin");
+
+// CEK LOGIN
+if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
+
+    session_unset();
+    session_destroy();
+
+    header("Location: login.php");
+    exit;
+}
+
+// SESSION TIMEOUT
+$timeout = 1800;
+
+if (isset($_SESSION['last_activity'])) {
+
+    if ((time() - $_SESSION['last_activity']) > $timeout) {
+
+        session_unset();
+        session_destroy();
+
+        header("Location: login.php?timeout=1");
+        exit;
+    }
+}
+
+$_SESSION['last_activity'] = time();
+
+// VALIDASI USER ID
+if (!isset($_SESSION['user_id'])) {
+
+    session_unset();
+    session_destroy();
+
+    header("Location: login.php");
+    exit;
 }
 ?>
 <?php
@@ -79,7 +117,7 @@ if (isset($_POST['update'])) {
     <meta content="" name="keywords">
 
     <!-- Favicons -->
-    <link href="assets/img/favicon.png" rel="icon">
+    <link href="assets/img/Street Mile Logo.png" rel="icon">
     <link href="assets/img/apple-touch-icon.png" rel="apple-touch-icon">
 
     <!-- Google Fonts -->
@@ -106,7 +144,7 @@ if (isset($_POST['update'])) {
 
         <div class="d-flex align-items-center justify-content-between">
             <a href="index.php" class="logo d-flex align-items-center">
-                <img src="assets/img/logo.png" alt="">
+                <img src="assets/img/Street Mile Logo.png" alt="">
                 <span class="d-none d-lg-block">Street Mile</span>
             </a>
             <i class="bi bi-list toggle-sidebar-btn"></i>
@@ -118,7 +156,7 @@ if (isset($_POST['update'])) {
                 <li class="nav-item dropdown pe-3">
 
                     <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-                        <img src="assets/img/profile-img.jpg" alt="Profile" class="rounded-circle">
+                        <img src="assets/img/Profile1.png" alt="Profile" class="rounded-circle">
                     </a><!-- End Profile Iamge Icon -->
 
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">

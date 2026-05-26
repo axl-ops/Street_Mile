@@ -1,44 +1,80 @@
 <?php
 session_start();
-include "koneksi.php";
 
-if (isset($_POST['login'])) {
+// Security Headers
+header("X-Frame-Options: SAMEORIGIN");
+header("X-Content-Type-Options: nosniff");
+header("Referrer-Policy: strict-origin-when-cross-origin");
 
-  $email = mysqli_real_escape_string($conn, $_POST['email']);
-  $password = $_POST['password'];
+require_once "koneksi.php";
 
-  // cek user
-  $query = mysqli_query($conn, "SELECT * FROM users WHERE email='$email' LIMIT 1");
-  $user = mysqli_fetch_assoc($query);
+// Batasi percobaan login sederhana
+if (!isset($_SESSION['login_attempt'])) {
+  $_SESSION['login_attempt'] = 0;
+}
 
-  if ($user) {
+if ($_SESSION['login_attempt'] >= 5) {
+  die("Terlalu banyak percobaan login. Coba lagi nanti.");
+}
 
-    // cek password (hash)
-    if (password_verify($password, $user['password'])) {
+$error = "";
 
-      // cek aktif
-      if ($user['is_active'] == 1) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
-        // simpan session
-        $_SESSION['login'] = true;
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['name'] = $user['name'];
-        $_SESSION['role'] = $user['role'];
+  $email = trim($_POST['email']);
+  $password = trim($_POST['password']);
 
-        // redirect
-        header("Location: index.php");
-        exit;
-      } else {
-        echo "<script>alert('Akun tidak aktif');</script>";
-      }
-    } else {
-      echo "<script>alert('Password salah');</script>";
-    }
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $error = "Format email tidak valid.";
   } else {
-    echo "<script>alert('Email tidak ditemukan');</script>";
+
+    $stmt = mysqli_prepare($conn, "SELECT id, name, email, password, role, is_active FROM users WHERE email = ? LIMIT 1");
+
+    if ($stmt) {
+
+      mysqli_stmt_bind_param($stmt, "s", $email);
+      mysqli_stmt_execute($stmt);
+
+      $result = mysqli_stmt_get_result($stmt);
+
+      if ($result && mysqli_num_rows($result) > 0) {
+
+        $user = mysqli_fetch_assoc($result);
+
+        if (password_verify($password, $user['password'])) {
+
+          if ((int)$user['is_active'] === 1) {
+
+            session_regenerate_id(true);
+            $_SESSION['login_attempt'] = 0;
+
+            $_SESSION['login'] = true;
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['name'] = htmlspecialchars($user['name']);
+            $_SESSION['role'] = htmlspecialchars($user['role']);
+
+            header("Location: index.php");
+            exit;
+          } else {
+            $error = "Akun tidak aktif.";
+          }
+        } else {
+          $_SESSION['login_attempt']++;
+          $error = "Email atau password salah.";
+        }
+      } else {
+        $_SESSION['login_attempt']++;
+        $error = "Email atau password salah.";
+      }
+
+      mysqli_stmt_close($stmt);
+    } else {
+      $error = "Terjadi kesalahan sistem.";
+    }
   }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -47,28 +83,59 @@ if (isset($_POST['login'])) {
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
 
   <title>Login - Street Mile</title>
-  <meta content="" name="description">
-  <meta content="" name="keywords">
 
-  <!-- Favicons -->
-  <link href="assets/img/favicon.png" rel="icon">
-  <link href="assets/img/apple-touch-icon.png" rel="apple-touch-icon">
+  <link href="assets/img/SM1.png" rel="icon">
 
-  <!-- Google Fonts -->
   <link href="https://fonts.gstatic.com" rel="preconnect">
-  <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700|Nunito:300,400,600,700|Poppins:300,400,500,600,700" rel="stylesheet">
 
-  <!-- Vendor CSS Files -->
   <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
-  <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
-  <link href="assets/vendor/quill/quill.snow.css" rel="stylesheet">
-  <link href="assets/vendor/quill/quill.bubble.css" rel="stylesheet">
-  <link href="assets/vendor/remixicon/remixicon.css" rel="stylesheet">
-  <link href="assets/vendor/simple-datatables/style.css" rel="stylesheet">
-
-  <!-- Template Main CSS File -->
   <link href="assets/css/style.css" rel="stylesheet">
+
+  <style>
+    @font-face {
+      font-family: 'FuturaHeavyOblique';
+      src: url('assets/font/FuturaHeavyOblique.ttf') format('truetype');
+    }
+
+    body {
+      background: url("assets/img/Login-Background.jpg") no-repeat center center fixed;
+      background-size: cover;
+      background-attachment: fixed;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: -1;
+    }
+
+    .logo-text {
+      font-family: 'FuturaHeavyOblique';
+      font-size: 32px;
+      font-style: italic;
+      font-weight: 900;
+      color: #ffffff !important;
+      letter-spacing: 1px;
+      margin-left: 8px;
+    }
+
+    .credits a {
+      font-family: 'Goudy Old Style', serif;
+      font-weight: 900;
+      color: #ffffff !important;
+      text-decoration: none;
+    }
+
+    .card {
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(2px);
+    }
+  </style>
 </head>
 
 <body>
@@ -77,101 +144,75 @@ if (isset($_POST['login'])) {
     <div class="container">
 
       <section class="section register min-vh-100 d-flex flex-column align-items-center justify-content-center py-4">
+
         <div class="container">
           <div class="row justify-content-center">
+
             <div class="col-lg-4 col-md-6 d-flex flex-column align-items-center justify-content-center">
 
+              <!-- Logo -->
               <div class="d-flex justify-content-center py-4">
-                <a href="index.html" class="logo d-flex align-items-center w-auto">
-                  <img src="assets/img/logo.png" alt="">
-                  <span class="d-none d-lg-block">Street Mile</span>
+                <a href="login.php" class="logo d-flex align-items-center w-auto">
+                  <img src="assets/img/Street Mile Logo login1.png" alt="Logo">
+                  <span class="d-none d-lg-block logo-text">Street Mile</span>
                 </a>
-              </div><!-- End Logo -->
+              </div>
 
               <div class="card mb-3">
-
                 <div class="card-body">
 
                   <div class="pt-4 pb-2">
-                    <h5 class="card-title text-center pb-0 fs-4">Login to Your Account</h5>
-                    <p class="text-center small">Enter your username & password to login</p>
+                    <h5 class="card-title text-center fs-4">Login to Your Account</h5>
+                    <p class="text-center small">Enter your email & password</p>
                   </div>
 
-                  <form class="row g-3 needs-validation" method="POST" novalidate>
+                  <?php if (!empty($error)) : ?>
+                    <div class="alert alert-danger text-center">
+                      <?php echo htmlspecialchars($error); ?>
+                    </div>
+                  <?php endif; ?>
+
+                  <form method="POST" class="row g-3">
 
                     <div class="col-12">
                       <label class="form-label">Email</label>
                       <input type="email" name="email" class="form-control" required>
-                      <div class="invalid-feedback">Please enter your email.</div>
                     </div>
 
                     <div class="col-12">
                       <label class="form-label">Password</label>
                       <input type="password" name="password" class="form-control" required>
-                      <div class="invalid-feedback">Please enter your password!</div>
                     </div>
 
                     <div class="col-12">
-                      <button class="btn btn-primary w-100" type="submit" name="login">Login</button>
+                      <button class="btn btn-primary w-100" type="submit" name="login">
+                        Login
+                      </button>
                     </div>
 
-                  </form>
-
-                  <div class="col-12">
-                    <label for="yourPassword" class="form-label">Password</label>
-                    <input type="password" name="password" class="form-control" id="yourPassword" required>
-                    <div class="invalid-feedback">Please enter your password!</div>
-                  </div>
-
-                  <div class="col-12">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" name="remember" value="true" id="rememberMe">
-                      <label class="form-check-label" for="rememberMe">Remember me</label>
-                    </div>
-                  </div>
-                  <div class="col-12">
-                    <button class="btn btn-primary w-100" type="submit">Login</button>
-                  </div>
-                  <div class="col-12">
-                    <p class="small mb-0">Don't have account? <a href="pages-register.html">Create an account</a></p>
-                  </div>
                   </form>
 
                 </div>
               </div>
 
-              <div class="credits">
-                <!-- All the links in the footer should remain intact. -->
-                <!-- You can delete the links only if you purchased the pro version. -->
-                <!-- Licensing information: https://bootstrapmade.com/license/ -->
-                <!-- Purchase the pro version with working PHP/AJAX contact form: https://bootstrapmade.com/nice-admin-bootstrap-admin-html-template/ -->
-                <div class="credits">
-                Designed by <a href="https://www.instagram.com/axelwavehassle/" target="_blank">Axel Indra Yudha</a>
+              <div class="credits text-white">
+                Designed by
+                <a href="https://www.instagram.com/axelwavehassle/" target="_blank">
+                  Axel Indra Yudha
+                </a>
               </div>
 
             </div>
+
           </div>
         </div>
 
       </section>
 
     </div>
-  </main><!-- End #main -->
+  </main>
 
-  <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
-
-  <!-- Vendor JS Files -->
-  <script src="assets/vendor/apexcharts/apexcharts.min.js"></script>
   <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-  <script src="assets/vendor/chart.js/chart.umd.js"></script>
-  <script src="assets/vendor/echarts/echarts.min.js"></script>
-  <script src="assets/vendor/quill/quill.min.js"></script>
-  <script src="assets/vendor/simple-datatables/simple-datatables.js"></script>
-  <script src="assets/vendor/tinymce/tinymce.min.js"></script>
-  <script src="assets/vendor/php-email-form/validate.js"></script>
-
-  <!-- Template Main JS File -->
-  <script src="assets/js/main.js"></script>
 
 </body>
 
