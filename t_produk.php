@@ -45,61 +45,170 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$auto = mysqli_query($conn, "select max(product_code) as max_code from products");
-$hasil = mysqli_fetch_array($auto);
-$code = $hasil['max_code'];
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-if ($code == NULL) {
+/*
+|--------------------------------------------------------------------------
+| GENERATE PRODUCT CODE
+|--------------------------------------------------------------------------
+*/
+$auto = mysqli_query(
+    $conn,
+    "SELECT MAX(product_code) AS max_code FROM products"
+);
+
+$hasil = mysqli_fetch_assoc($auto);
+
+$code = $hasil['max_code'] ?? null;
+
+if ($code === null) {
+
     $urutan = 0;
 } else {
+
     $urutan = (int) substr($code, 1, 3);
 }
 
 $urutan++;
-$huruf = "P";
-$kd_produk = $huruf . sprintf("%03s", $urutan);
 
+$kd_produk = 'P' . sprintf('%03d', $urutan);
+
+/*
+|--------------------------------------------------------------------------
+| INSERT PRODUK
+|--------------------------------------------------------------------------
+*/
 if (isset($_POST['simpan'])) {
 
-    // Perbaikan anti error SQL
-    $nm_produk   = mysqli_real_escape_string($conn, $_POST['nm_produk']);
-    $stok        = mysqli_real_escape_string($conn, $_POST['stok']);
-    $min_stok    = mysqli_real_escape_string($conn, $_POST['min_stok']);
-    $harga       = mysqli_real_escape_string($conn, $_POST['harga']);
-    $id_kategori = mysqli_real_escape_string($conn, $_POST['id_kategori']);
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDASI INPUT
+    |--------------------------------------------------------------------------
+    */
+    $nm_produk = trim($_POST['nm_produk'] ?? '');
+    $stok = (int) ($_POST['stok'] ?? 0);
+    $min_stok = (int) ($_POST['min_stok'] ?? 0);
+    $harga = (float) ($_POST['harga'] ?? 0);
+    $id_kategori = (int) ($_POST['id_kategori'] ?? 0);
 
-    // Upload Gambar
-    $imgfile = $_FILES['gambar']['name'];
-    $tmp_file = $_FILES['gambar']['tmp_name'];
-    $extension = strtolower(pathinfo($imgfile, PATHINFO_EXTENSION));
+    if (
+        empty($nm_produk) ||
+        $stok < 0 ||
+        $min_stok < 0 ||
+        $harga < 0 ||
+        $id_kategori <= 0
+    ) {
 
-    $dir = "produk_img/";
-    $allowed_extensions = array("jpg", "jpeg", "png", "webp");
-
-    if (!in_array($extension, $allowed_extensions)) {
-
-        echo "<script>alert('Format tidak valid. Hanya jpg, jpeg, png, dan webp yang diperbolehkan.');</script>";
+        echo "<script>alert('Data tidak valid!');</script>";
     } else {
 
-        $imgnewfile = md5(time() . $imgfile) . "." . $extension;
+        /*
+        |--------------------------------------------------------------------------
+        | VALIDASI GAMBAR
+        |--------------------------------------------------------------------------
+        */
+        if (
+            !isset($_FILES['gambar']) ||
+            $_FILES['gambar']['error'] !== UPLOAD_ERR_OK
+        ) {
 
-        move_uploaded_file($tmp_file, $dir . $imgnewfile);
-
-        $query = mysqli_query($conn, "
-            INSERT INTO products
-            (category_id, product_code, product_name, stock, min_stock, price, gambar)
-
-            VALUES
-            ('$id_kategori', '$kd_produk', '$nm_produk', '$stok', '$min_stok', '$harga', '$imgnewfile')
-        ");
-
-        if ($query) {
-
-            echo "<script>alert('Produk berhasil ditambahkan!')</script>";
-            header("refresh:0, produk.php");
+            echo "<script>alert('Upload gambar gagal!');</script>";
         } else {
 
-            die(mysqli_error($conn));
+            $imgfile = $_FILES['gambar']['name'];
+            $tmp_file = $_FILES['gambar']['tmp_name'];
+            $file_size = $_FILES['gambar']['size'];
+
+            $extension = strtolower(
+                pathinfo($imgfile, PATHINFO_EXTENSION)
+            );
+
+            $allowed_extensions = ['jpg', 'jpeg', 'png', 'webp'];
+
+            /*
+            |--------------------------------------------------------------------------
+            | VALIDASI EXTENSION
+            |--------------------------------------------------------------------------
+            */
+            if (!in_array($extension, $allowed_extensions, true)) {
+
+                echo "<script>alert('Format gambar tidak valid!');</script>";
+            }
+            /*
+            |--------------------------------------------------------------------------
+            | VALIDASI UKURAN FILE
+            |--------------------------------------------------------------------------
+            */ elseif ($file_size > 2 * 1024 * 1024) {
+
+                echo "<script>alert('Ukuran gambar maksimal 2MB!');</script>";
+            } else {
+
+                /*
+                |--------------------------------------------------------------------------
+                | GENERATE NAMA FILE AMAN
+                |--------------------------------------------------------------------------
+                */
+                $imgnewfile =
+                    bin2hex(random_bytes(16)) . '.' . $extension;
+
+                $upload_path = 'produk_img/' . $imgnewfile;
+
+                /*
+                |--------------------------------------------------------------------------
+                | UPLOAD FILE
+                |--------------------------------------------------------------------------
+                */
+                if (!move_uploaded_file($tmp_file, $upload_path)) {
+
+                    echo "<script>alert('Gagal upload gambar!');</script>";
+                } else {
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | INSERT DATABASE (PREPARED STATEMENT)
+                    |--------------------------------------------------------------------------
+                    */
+                    $stmt = mysqli_prepare(
+                        $conn,
+                        "INSERT INTO products
+                        (
+                            category_id,
+                            product_code,
+                            product_name,
+                            stock,
+                            min_stock,
+                            price,
+                            gambar
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    );
+
+                    mysqli_stmt_bind_param(
+                        $stmt,
+                        "issiids",
+                        $id_kategori,
+                        $kd_produk,
+                        $nm_produk,
+                        $stok,
+                        $min_stok,
+                        $harga,
+                        $imgnewfile
+                    );
+
+                    $query = mysqli_stmt_execute($stmt);
+
+                    if ($query) {
+
+                        header("Location: produk.php?success=1");
+                        exit;
+                    } else {
+
+                        echo "<script>alert('Data gagal disimpan!');</script>";
+                    }
+
+                    mysqli_stmt_close($stmt);
+                }
+            }
         }
     }
 }
@@ -134,7 +243,38 @@ if (isset($_POST['simpan'])) {
 
     <!-- Template Main CSS File -->
     <link href="assets/css/style.css" rel="stylesheet">
+    <style>
+        :root {
+            --main-font: Helvetica, Arial, sans-serif;
+        }
 
+        body,
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        p,
+        a,
+        li,
+        table,
+        th,
+        td,
+        button,
+        input,
+        select,
+        textarea,
+        label,
+        span,
+        .card-title,
+        .nav-link,
+        .dropdown-item,
+        .breadcrumb,
+        .logo span {
+            font-family: var(--main-font) !important;
+        }
+    </style>
 </head>
 
 <body>
@@ -160,8 +300,12 @@ if (isset($_POST['simpan'])) {
 
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
                         <li class="dropdown-header">
-                            <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
-                            <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
+                            <h6>
+                                <?= htmlspecialchars($_SESSION['name'] ?? 'User'); ?>
+                            </h6>
+                            <span>
+                                <?= htmlspecialchars($_SESSION['role'] ?? 'Role'); ?>
+                            </span>
                         </li>
 
                         <li>
@@ -254,7 +398,7 @@ if (isset($_POST['simpan'])) {
 
                                 <div class="col-12">
                                     <label for="kd_produk" class="form-label">Kode Produk</label>
-                                    <input type="text" class="form-control" id="kd_produk" name="kd_produk" value="<?php echo $kd_produk ?>" readonly>
+                                    <input type="text" class="form-control" id="kd_produk" name="kd_produk" value="<?= htmlspecialchars($kd_produk); ?>" readonly>
                                 </div>
 
                                 <div class="col-12">
@@ -285,13 +429,32 @@ if (isset($_POST['simpan'])) {
                                         <option value="">-- Pilih Kategori --</option>
 
                                         <?php
-                                        include "koneksi.php";
 
-                                        $query = mysqli_query($conn, "SELECT * FROM categories");
+                                        $queryKategori = mysqli_query(
+                                            $conn,
+                                            "SELECT id, category_name
+     FROM categories
+     ORDER BY category_name ASC"
+                                        );
 
-                                        while ($kategori = mysqli_fetch_array($query)) {
-                                            echo "<option value='{$kategori['id']}'>{$kategori['category_name']}</option>";
-                                        }
+                                        if (
+                                            $queryKategori instanceof mysqli_result &&
+                                            mysqli_num_rows($queryKategori) > 0
+                                        ):
+
+                                            while ($kategori = mysqli_fetch_assoc($queryKategori)) :
+                                        ?>
+
+                                                <option value="<?= (int) $kategori['id']; ?>">
+
+                                                    <?= htmlspecialchars($kategori['category_name']); ?>
+
+                                                </option>
+
+                                        <?php
+                                            endwhile;
+
+                                        endif;
                                         ?>
 
                                     </select>

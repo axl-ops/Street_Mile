@@ -52,7 +52,7 @@ if (!isset($_SESSION['user_id'])) {
   <meta charset="utf-8">
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
 
-  <title>users - Street Mile</title>
+  <title>Manajemen User - Street Mile</title>
   <meta content="" name="description">
   <meta content="" name="keywords">
 
@@ -75,6 +75,55 @@ if (!isset($_SESSION['user_id'])) {
 
   <!-- Template Main CSS File -->
   <link href="assets/css/style.css" rel="stylesheet">
+
+  <style>
+    /* =========================
+       GLOBAL FONT OVERRIDE
+    ========================= */
+
+    :root {
+      --app-font: Helvetica, Arial, sans-serif;
+    }
+
+    html,
+    body {
+      font-family: var(--app-font) !important;
+      font-weight: 400;
+      letter-spacing: 0.2px;
+    }
+
+    body * {
+      font-family: var(--app-font) !important;
+    }
+    .logo span,
+    .sidebar,
+    .header,
+    .nav-link,
+    .dropdown-item,
+    .card,
+    .card-title,
+    .table,
+    .table th,
+    .table td,
+    .btn,
+    input,
+    select,
+    textarea,
+    label,
+    .breadcrumb,
+    .datatable-wrapper,
+    .datatable-table,
+    .datatable-input,
+    .datatable-selector,
+    .datatable-top,
+    .datatable-bottom {
+      font-family: var(--app-font) !important;
+    }
+
+    .logo span {
+      font-family: var(--app-font) !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -194,65 +243,121 @@ if (!isset($_SESSION['user_id'])) {
               <div class="card-body mt-3">
 
                 <!-- Table with stripped rows -->
-                <table class="table datatable">
+                <table class="table table-borderless datatable" data-page-length="5">
                   <thead>
                     <tr>
-                      <th>No</th>
-                      <th>Nama</th>
-                      <th>Email</th>
-                      <th>Role</th>
-                      <th>Status</th>
-                      <th>Dibuat</th>
-                      <th>Aksi</th>
+                      <th scope="col">No</th>
+                      <th scope="col">Nama</th>
+                      <th scope="col">Email</th>
+                      <th scope="col">Role</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Dibuat</th>
+                      <th scope="col">Aksi</th>
                     </tr>
                   </thead>
                   <tbody>
+
                     <?php
-                    include "koneksi.php";
 
                     $no = 1;
-                    $sql = mysqli_query($conn, "SELECT * FROM users");
 
-                    while ($data = mysqli_fetch_array($sql)) {
+                    $sql = mysqli_query(
+                      $conn,
+                      "SELECT 
+      id,
+      name,
+      email,
+      role,
+      is_active,
+      created_at
+   FROM users
+   ORDER BY created_at DESC"
+                    );
+
                     ?>
 
+                    <?php if ($sql instanceof mysqli_result && mysqli_num_rows($sql) > 0): ?>
+
+                      <?php while ($data = mysqli_fetch_assoc($sql)): ?>
+
+                        <tr>
+
+                          <td>
+                            <?= $no++; ?>
+                          </td>
+
+                          <td>
+                            <?= htmlspecialchars($data['name']); ?>
+                          </td>
+
+                          <td>
+                            <?= htmlspecialchars($data['email']); ?>
+                          </td>
+
+                          <td>
+                            <?= htmlspecialchars(ucfirst($data['role'])); ?>
+                          </td>
+
+                          <td>
+
+                            <?php if ((int) $data['is_active'] === 1): ?>
+
+                              <span class="badge bg-success">
+                                Aktif
+                              </span>
+
+                            <?php else: ?>
+
+                              <span class="badge bg-danger">
+                                Nonaktif
+                              </span>
+
+                            <?php endif; ?>
+
+                          </td>
+
+                          <td>
+                            <?= date(
+                              'd-m-Y H:i',
+                              strtotime($data['created_at'])
+                            ); ?>
+                          </td>
+
+                          <td>
+
+                            <a
+                              href="e_users.php?id=<?= (int) $data['id']; ?>"
+                              class="btn btn-warning btn-sm">
+                              Edit
+                            </a>
+
+                            <a
+                              href="h_users.php?id=<?= (int) $data['id']; ?>"
+                              class="btn btn-danger btn-sm"
+                              onclick="return confirm('Apakah Anda yakin ingin menghapus user ini?')">
+                              Hapus
+                            </a>
+
+                          </td>
+
+                        </tr>
+
+                      <?php endwhile; ?>
+
+                    <?php else: ?>
+
                       <tr>
-                        <td><?php echo $no++; ?></td>
 
-                        <td><?php echo $data['name']; ?></td>
+                        <td colspan="7" class="text-center text-muted">
 
-                        <td><?php echo $data['email']; ?></td>
+                          Data user tidak tersedia
 
-                        <td><?php echo ucfirst($data['role']); ?></td>
-
-                        <td>
-                          <?php
-                          if ($data['is_active'] == 1) {
-                            echo '<span class="badge bg-success">Aktif</span>';
-                          } else {
-                            echo '<span class="badge bg-danger">Nonaktif</span>';
-                          }
-                          ?>
                         </td>
 
-                        <td>
-                          <?php echo date('d-m-Y H:i', strtotime($data['created_at'])); ?>
-                        </td>
-
-                        <td>
-                          <a href="e_users.php?id=<?php echo $data['id']; ?>"
-                            class="btn btn-warning btn-sm">
-                            Edit
-                          </a>
-
-                          <a href="h_users.php?id=<?php echo $data['id']; ?>"
-                            class="btn btn-danger btn-sm"
-                            onclick="return confirm('Apakah Anda yakin ingin menghapus users ini?')">
-                            Hapus
-                          </a>
-                        </td>
                       </tr>
-                    <?php } ?>
+
+                    <?php endif; ?>
+
                   </tbody>
                 </table>
                 <!-- End Table with stripped rows -->

@@ -1,21 +1,66 @@
 <?php
+
+declare(strict_types=1);
+
 session_start();
-// cek apakah sudah login
-if (!isset($_SESSION['login'])) {
+require_once 'koneksi.php';
+
+/* =========================
+   AUTH CHECK (AMAN)
+========================= */
+if (empty($_SESSION['login']) || empty($_SESSION['user_id'])) {
+  session_unset();
+  session_destroy();
   header('Location: login.php');
   exit;
 }
-?>
-<?php
-include 'koneksi.php';
-//total stok
-$total_item = mysqli_num_rows(mysqli_query($conn, "SELECT id FROM products"));
-//total transaksi barang masuk
-$total_barang_masuk = mysqli_num_rows(mysqli_query($conn, "SELECT id FROM stock_logs WHERE change_type = 'ADD'"));
-//total transaksi barang keluar
-$total_barang_keluar = mysqli_num_rows(mysqli_query($conn, "SELECT id FROM stock_logs WHERE change_type = 'REDUCE'"));
-//total transaksi barang kritis
-$total_stok_kritis = mysqli_num_rows(mysqli_query($conn, "SELECT id FROM products WHERE stock <= min_stock"));
+
+/* =========================
+   SECURITY HEADER
+========================= */
+header("X-Frame-Options: SAMEORIGIN");
+header("X-Content-Type-Options: nosniff");
+header("Referrer-Policy: strict-origin-when-cross-origin");
+
+/* =========================
+   TIMEZONE
+========================= */
+date_default_timezone_set('Asia/Jakarta');
+
+/* =========================
+   SAFE COUNT FUNCTION
+========================= */
+function safeCount(mysqli $conn, string $query): int
+{
+  $result = mysqli_query($conn, $query);
+
+  if (!$result) {
+    error_log("Query error: " . mysqli_error($conn));
+    return 0;
+  }
+
+  return (int) mysqli_num_rows($result);
+}
+
+/* =========================
+   TOTAL DATA (FIXED + SAFE)
+========================= */
+$total_item = safeCount($conn, "SELECT id FROM products");
+
+$total_barang_masuk = safeCount(
+  $conn,
+  "SELECT id FROM stock_logs WHERE change_type = 'ADD'"
+);
+
+$total_barang_keluar = safeCount(
+  $conn,
+  "SELECT id FROM stock_logs WHERE change_type = 'REDUCE'"
+);
+
+$total_stok_kritis = safeCount(
+  $conn,
+  "SELECT id FROM products WHERE stock <= min_stock"
+);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -47,6 +92,27 @@ $total_stok_kritis = mysqli_num_rows(mysqli_query($conn, "SELECT id FROM product
 
   <!-- Template Main CSS File -->
   <link href="assets/css/style.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --main-font: Helvetica, Arial, sans-serif;
+    }
+
+    html,
+    body {
+      font-family: var(--main-font);
+    }
+
+    body * {
+      font-family: inherit;
+    }
+
+    /* FIX khusus logo store */
+    .logo,
+    .logo span {
+      font-family: var(--main-font);
+    }
+  </style>
 </head>
 
 <body>
@@ -63,38 +129,38 @@ $total_stok_kritis = mysqli_num_rows(mysqli_query($conn, "SELECT id FROM product
     </div><!-- End Logo -->
 
 
-     <nav class="header-nav ms-auto">
-            <ul class="d-flex align-items-center">
-                <li class="nav-item dropdown pe-3">
+    <nav class="header-nav ms-auto">
+      <ul class="d-flex align-items-center">
+        <li class="nav-item dropdown pe-3">
 
-                    <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-                        <img src="assets/img/Profile1.png" alt="Profile" class="rounded-circle">
-                    </a><!-- End Profile Iamge Icon -->
+          <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
+            <img src="assets/img/Profile1.png" alt="Profile" class="rounded-circle">
+          </a><!-- End Profile Iamge Icon -->
 
-                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
-                        <li class="dropdown-header">
-                            <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
-                            <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
-                        </li>
-                        <li>
-                            <hr class="dropdown-divider" />
-                        </li>
+          <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
+            <li class="dropdown-header">
+              <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
+              <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
+            </li>
+            <li>
+              <hr class="dropdown-divider" />
+            </li>
 
-                        <li>
-                            <a class="dropdown-item d-flex align-items-center" href="logout.php">
-                                <i class="bi bi-box-arrow-right"></i>
-                                <span>Sign Out</span>
-                            </a>
-                        </li>
-                    </ul><!-- End Profile Dropdown Items -->
-                </li><!-- End Profile Nav -->
-            </ul>
-        </nav><!-- End Icons Navigation -->
+            <li>
+              <a class="dropdown-item d-flex align-items-center" href="logout.php">
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Sign Out</span>
+              </a>
+            </li>
+          </ul><!-- End Profile Dropdown Items -->
+        </li><!-- End Profile Nav -->
+      </ul>
+    </nav><!-- End Icons Navigation -->
 
   </header><!-- End Header -->
 
   <!-- ======= Sidebar ======= -->
-   <aside id="sidebar" class="sidebar">
+  <aside id="sidebar" class="sidebar">
 
     <ul class="sidebar-nav" id="sidebar-nav">
 
@@ -187,7 +253,7 @@ $total_stok_kritis = mysqli_num_rows(mysqli_query($conn, "SELECT id FROM product
             </div>
           </div>
         </div>
-        <!-- Laporan Stok Minimum --> 
+        <!-- Laporan Stok Minimum -->
         <div class="col-lg-6">
           <div class="card shadow-sm">
             <div class="card-body">
@@ -215,8 +281,9 @@ $total_stok_kritis = mysqli_num_rows(mysqli_query($conn, "SELECT id FROM product
       <!-- You can delete the links only if you purchased the pro version. -->
       <!-- Licensing information: https://bootstrapmade.com/license/ -->
       <!-- Purchase the pro version with working PHP/AJAX contact form: https://bootstrapmade.com/nice-admin-bootstrap-admin-html-template/ -->
-      <a href="#">AxelIndraYudha</a>
-    </div>
+      <div class="credits">
+        Designed by <a href="https://www.instagram.com/axelwavehassle/">Axel Indra Yudha</a>
+      </div>
   </footer><!-- End Footer -->
 
   <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>

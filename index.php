@@ -1,110 +1,299 @@
 <?php
+
+declare(strict_types=1);
+
+/*
+|--------------------------------------------------------------------------
+| SESSION SECURITY
+|--------------------------------------------------------------------------
+*/
+session_set_cookie_params([
+  'lifetime' => 0,
+  'path' => '/',
+  'domain' => '',
+  'secure' => isset($_SERVER['HTTPS']),
+  'httponly' => true,
+  'samesite' => 'Strict'
+]);
+
 session_start();
 
-require_once 'koneksi.php';
-
-// SECURITY HEADER
-header("X-Frame-Options: SAMEORIGIN");
-header("X-Content-Type-Options: nosniff");
-header("Referrer-Policy: strict-origin-when-cross-origin");
-
-// CEK LOGIN
-if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
-
-    session_unset();
-    session_destroy();
-
-    header("Location: login.php");
-    exit;
+/*
+|--------------------------------------------------------------------------
+| REGENERATE SESSION
+|--------------------------------------------------------------------------
+*/
+if (!isset($_SESSION['initiated'])) {
+  session_regenerate_id(true);
+  $_SESSION['initiated'] = true;
 }
 
-// SESSION TIMEOUT
-$timeout = 1800;
+/*
+|--------------------------------------------------------------------------
+| DATABASE CONNECTION
+|--------------------------------------------------------------------------
+*/
+require_once 'koneksi.php';
 
-if (isset($_SESSION['last_activity'])) {
+/*
+|--------------------------------------------------------------------------
+| TIMEZONE
+|--------------------------------------------------------------------------
+*/
+date_default_timezone_set('Asia/Jakarta');
 
-    if ((time() - $_SESSION['last_activity']) > $timeout) {
+/*
+|--------------------------------------------------------------------------
+| SECURITY HEADERS
+|--------------------------------------------------------------------------
+*/
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('X-XSS-Protection: 1; mode=block');
+header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+header('Content-Security-Policy: default-src \'self\'; img-src \'self\' data:; style-src \'self\' \'unsafe-inline\'; script-src \'self\' \'unsafe-inline\';');
 
-        session_unset();
-        session_destroy();
+/*
+|--------------------------------------------------------------------------
+| ERROR REPORTING
+|--------------------------------------------------------------------------
+*/
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-        header("Location: login.php?timeout=1");
-        exit;
-    }
+/*
+|--------------------------------------------------------------------------
+| SESSION VALIDATION
+|--------------------------------------------------------------------------
+*/
+if (
+  empty($_SESSION['login']) ||
+  $_SESSION['login'] !== true ||
+  empty($_SESSION['user_id'])
+) {
+
+  session_unset();
+  session_destroy();
+
+  header('Location: login.php');
+  exit;
+}
+
+/*
+|--------------------------------------------------------------------------
+| SESSION TIMEOUT
+|--------------------------------------------------------------------------
+*/
+$timeout = 1800; // 30 menit
+
+if (
+  isset($_SESSION['last_activity']) &&
+  (time() - $_SESSION['last_activity']) > $timeout
+) {
+
+  session_unset();
+  session_destroy();
+
+  header('Location: login.php?timeout=1');
+  exit;
 }
 
 $_SESSION['last_activity'] = time();
 
-// VALIDASI USER ID
-if (!isset($_SESSION['user_id'])) {
+/*
+|--------------------------------------------------------------------------
+| SAFE QUERY FUNCTION
+|--------------------------------------------------------------------------
+*/
+function safeQuery(mysqli $conn, string $query)
+{
+  $result = mysqli_query($conn, $query);
 
-    session_unset();
-    session_destroy();
+  if (!$result) {
+    error_log('Database Query Error: ' . mysqli_error($conn));
+    return false;
+  }
 
-    header("Location: login.php");
-    exit;
+  return $result;
 }
-?>
-<?php
-include 'koneksi.php';
-date_default_timezone_set('Asia/Jakarta');
 
-// total produk
-$q_produk = mysqli_query($conn, "SELECT COUNT(*) AS total_produk FROM products");
+/*
+|--------------------------------------------------------------------------
+| DASHBOARD DATA
+|--------------------------------------------------------------------------
+*/
+
+// Total Produk
+$q_produk = safeQuery(
+  $conn,
+  "SELECT COUNT(*) AS total_produk FROM products"
+);
+
 $data_produk = mysqli_fetch_assoc($q_produk);
 
-// total stok
-$q_stok = mysqli_query($conn, "SELECT SUM(stock) AS total_stok FROM products");
+// Total Stok
+$q_stok = safeQuery(
+  $conn,
+  "SELECT SUM(stock) AS total_stok FROM products"
+);
+
 $data_stok = mysqli_fetch_assoc($q_stok);
 
-// total kategori
-$q_kategori = mysqli_query($conn, "SELECT COUNT(*) AS total_kategori FROM categories");
+// Total Kategori
+$q_kategori = safeQuery(
+  $conn,
+  "SELECT COUNT(*) AS total_kategori FROM categories"
+);
+
 $data_kategori = mysqli_fetch_assoc($q_kategori);
 
-// barang masuk per hari (bulan ini)
-$q_masuk = mysqli_query($conn, "SELECT DAY(created_at) AS hari, SUM(qty) AS total FROM stock_logs WHERE change_type = 'ADD' AND MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE()) GROUP BY DAY(created_at)");
+// Barang Masuk
+$q_masuk = safeQuery(
+  $conn,
+  "SELECT 
+        DAY(created_at) AS hari,
+        SUM(qty) AS total
+    FROM stock_logs
+    WHERE change_type = 'ADD'
+    AND MONTH(created_at) = MONTH(CURRENT_DATE())
+    AND YEAR(created_at) = YEAR(CURRENT_DATE())
+    GROUP BY DAY(created_at)"
+);
 
-// barang keluar per hari (bulan ini)
-$q_keluar = mysqli_query($conn, "SELECT DAY(created_at) AS hari, SUM(qty) AS total FROM stock_logs WHERE change_type = 'REDUCE' AND MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE()) GROUP BY DAY(created_at)");
+// Barang Keluar
+$q_keluar = safeQuery(
+  $conn,
+  "SELECT 
+        DAY(created_at) AS hari,
+        SUM(qty) AS total
+    FROM stock_logs
+    WHERE change_type = 'REDUCE'
+    AND MONTH(created_at) = MONTH(CURRENT_DATE())
+    AND YEAR(created_at) = YEAR(CURRENT_DATE())
+    GROUP BY DAY(created_at)"
+);
 
-// siapkan array 1-31 (default 0)
+/*
+|--------------------------------------------------------------------------
+| DEFAULT CHART DATA
+|--------------------------------------------------------------------------
+*/
 $masuk = array_fill(1, 31, 0);
 $keluar = array_fill(1, 31, 0);
 
-// isi data masuk
-while ($row = mysqli_fetch_assoc($q_masuk)) {
-  $masuk[$row['hari']] = (int) $row['total'];
+/*
+|--------------------------------------------------------------------------
+| PROCESS DATA MASUK
+|--------------------------------------------------------------------------
+*/
+if ($q_masuk instanceof mysqli_result) {
+  while ($row = mysqli_fetch_assoc($q_masuk)) {
+
+    $hari = (int) $row['hari'];
+
+    if ($hari >= 1 && $hari <= 31) {
+      $masuk[$hari] = (int) $row['total'];
+    }
+  }
 }
 
-// isi data keluar
-while ($row = mysqli_fetch_assoc($q_keluar)) {
-  $keluar[$row['hari']] = (int) $row['total'];
+/*
+|--------------------------------------------------------------------------
+| PROCESS DATA KELUAR
+|--------------------------------------------------------------------------
+*/
+if ($q_keluar instanceof mysqli_result) {
+  while ($row = mysqli_fetch_assoc($q_keluar)) {
+
+    $hari = (int) $row['hari'];
+
+    if ($hari >= 1 && $hari <= 31) {
+      $keluar[$hari] = (int) $row['total'];
+    }
+  }
 }
 
-$query = mysqli_query($conn, "SELECT p.product_name, p.stock, c.category_name FROM products p JOIN categories c ON p.category_id = c.id ORDER BY p.created_at DESC LIMIT 5");
+/*
+|--------------------------------------------------------------------------
+| PRODUK TERBARU
+|--------------------------------------------------------------------------
+*/
+$query = safeQuery(
+  $conn,
+  "SELECT 
+      p.product_name,
+      p.stock,
+      c.category_name
+   FROM products p
+   INNER JOIN categories c
+      ON p.category_id = c.id
+   ORDER BY p.created_at DESC
+   LIMIT 5"
+);
 
-// ambil produk dengan stok <= min_stock
-$q_menipis = mysqli_query($conn, "SELECT product_name, stock, min_stock FROM products WHERE stock <= min_stock ORDER BY stock ASC LIMIT 5");
+/*
+|--------------------------------------------------------------------------
+| STOK MENIPIS
+|--------------------------------------------------------------------------
+*/
+$q_menipis = safeQuery(
+  $conn,
+  "SELECT 
+      product_name,
+      stock,
+      min_stock
+   FROM products
+   WHERE stock <= min_stock
+   ORDER BY stock ASC
+   LIMIT 5"
+);
 
-$q_aktivitas = mysqli_query($conn, "SELECT sl.*, p.product_name, u.name AS user_name FROM stock_logs sl JOIN products p ON sl.product_id = p.id JOIN users u ON sl.created_by = u.id ORDER BY sl.created_at DESC LIMIT 5");
+/*
+|--------------------------------------------------------------------------
+| AKTIVITAS STOK
+|--------------------------------------------------------------------------
+*/
+$q_aktivitas = safeQuery(
+  $conn,
+  "SELECT 
+      sl.*,
+      p.product_name,
+      u.name AS user_name
+   FROM stock_logs sl
+   INNER JOIN products p
+      ON sl.product_id = p.id
+   INNER JOIN users u
+      ON sl.created_by = u.id
+   ORDER BY sl.created_at DESC
+   LIMIT 5"
+);
 
-function waktu_lalu($datetime)
+/*
+|--------------------------------------------------------------------------
+| FORMAT WAKTU
+|--------------------------------------------------------------------------
+*/
+function waktu_lalu(string $datetime): string
 {
   $selisih = time() - strtotime($datetime);
 
-  // kalau negatif, anggap 0
-  if ($selisih < 0) $selisih = 0;
+  if ($selisih < 0) {
+    $selisih = 0;
+  }
+
   $menit = floor($selisih / 60);
-  $jam = floor($selisih / 3600);
-  $hari = floor($selisih / 86400);
+  $jam   = floor($selisih / 3600);
+  $hari  = floor($selisih / 86400);
 
   if ($menit < 60) {
     return $menit . ' menit yang lalu';
-  } else if ($jam < 24) {
-    return $jam . ' jam yang lalu';
-  } else {
-    return $hari . ' hari yang lalu';
   }
+
+  if ($jam < 24) {
+    return $jam . ' jam yang lalu';
+  }
+
+  return $hari . ' hari yang lalu';
 }
 ?>
 <!DOCTYPE html>
@@ -122,10 +311,6 @@ function waktu_lalu($datetime)
   <link href="assets/img/Street Mile Logo.png" rel="icon">
   <link href="assets/img/apple-touch-icon.png" rel="apple-touch-icon">
 
-  <!-- Google Fonts -->
-  <link href="https://fonts.gstatic.com" rel="preconnect">
-  <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,600,600i,700,700i|Nunito:300,300i,400,400i,600,600i,700,700i|Poppins:300,300i,400,400i,500,500i,600,600i,700,700i" rel="stylesheet">
-
   <!-- Vendor CSS Files -->
   <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
@@ -137,6 +322,51 @@ function waktu_lalu($datetime)
 
   <!-- Template Main CSS File -->
   <link href="assets/css/style.css" rel="stylesheet">
+
+  <!-- Custom Typography -->
+  <style>
+    :root {
+      --main-font: Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      font-family: var(--main-font);
+      font-weight: 400;
+      letter-spacing: 0.2px;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    p,
+    a,
+    li,
+    table,
+    th,
+    td,
+    button,
+    input,
+    select,
+    textarea,
+    label,
+    span,
+    .card-title,
+    .nav-link,
+    .dropdown-item,
+    .breadcrumb,
+    .activity-content,
+    .activity-label,
+    .datatable-wrapper,
+    .datatable-table,
+    .datatable-input,
+    .datatable-selector {
+      font-family: inherit;
+    }
+  </style>
+
 </head>
 
 <body>
@@ -159,7 +389,7 @@ function waktu_lalu($datetime)
 
           <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
             <img src="assets/img/Profile1.png" alt="Profile" class="rounded-circle">
-          </a><!-- End Profile Iamge Icon -->
+          </a><!-- End Profile Image Icon -->
 
           <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
             <li class="dropdown-header">
@@ -391,7 +621,7 @@ function waktu_lalu($datetime)
                 <div class="card-body">
                   <h5 class="card-title">Produk Terbaru <span>| Latest</span></h5>
 
-                  <table class="table table-borderless datatable">
+                  <table class="table table-borderless datatable" data-page-length="5">
                     <thead>
                       <tr>
                         <th scope="col">#</th>
@@ -400,20 +630,45 @@ function waktu_lalu($datetime)
                         <th scope="col">Stok</th>
                       </tr>
                     </thead>
+
                     <tbody>
-                      <?php $no = 1;
-                      while ($row = mysqli_fetch_assoc($query)) :
-                      ?>
+
+                      <?php if ($query instanceof mysqli_result && mysqli_num_rows($query) > 0): ?>
+
+                        <?php $no = 1; ?>
+
+                        <?php while ($row = mysqli_fetch_assoc($query)): ?>
+
+                          <tr>
+                            <th><?= $no++; ?></th>
+
+                            <td>
+                              <?= htmlspecialchars($row['product_name']); ?>
+                            </td>
+
+                            <td>
+                              <?= htmlspecialchars($row['category_name']); ?>
+                            </td>
+
+                            <td>
+                              <?= (int) $row['stock']; ?>
+                            </td>
+                          </tr>
+
+                        <?php endwhile; ?>
+
+                      <?php else: ?>
+
                         <tr>
-                          <th><?= $no++; ?></th>
-                          <td><?= $row['product_name']; ?></td>
-                          <td><?= $row['category_name']; ?></td>
-                          <td><?= $row['stock']; ?></td>
+                          <td colspan="4" class="text-center text-muted">
+                            Data produk tidak tersedia
+                          </td>
                         </tr>
-                      <?php endwhile; ?>
+
+                      <?php endif; ?>
+
                     </tbody>
                   </table>
-
                 </div>
 
               </div>

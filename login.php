@@ -1,14 +1,24 @@
 <?php
+
+declare(strict_types=1);
+
 session_start();
 
-// Security Headers
+/* =========================
+   SECURITY HEADERS
+========================= */
 header("X-Frame-Options: SAMEORIGIN");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 
+/* =========================
+   DATABASE
+========================= */
 require_once "koneksi.php";
 
-// Batasi percobaan login sederhana
+/* =========================
+   LOGIN RATE LIMIT
+========================= */
 if (!isset($_SESSION['login_attempt'])) {
   $_SESSION['login_attempt'] = 0;
 }
@@ -17,18 +27,35 @@ if ($_SESSION['login_attempt'] >= 5) {
   die("Terlalu banyak percobaan login. Coba lagi nanti.");
 }
 
+/* =========================
+   INIT ERROR
+========================= */
 $error = "";
 
+/* =========================
+   LOGIN PROCESS
+========================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
-  $email = trim($_POST['email']);
-  $password = trim($_POST['password']);
+  $email = trim($_POST['email'] ?? '');
+  $password = trim($_POST['password'] ?? '');
 
-  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+  /* VALIDASI KOSONG */
+  if ($email === '' || $password === '') {
+    $error = "Email dan password wajib diisi.";
+  }
+
+  /* VALIDASI FORMAT EMAIL */ elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     $error = "Format email tidak valid.";
   } else {
 
-    $stmt = mysqli_prepare($conn, "SELECT id, name, email, password, role, is_active FROM users WHERE email = ? LIMIT 1");
+    $stmt = mysqli_prepare(
+      $conn,
+      "SELECT id, name, email, password, role, is_active
+       FROM users
+       WHERE email = ?
+       LIMIT 1"
+    );
 
     if ($stmt) {
 
@@ -37,21 +64,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
       $result = mysqli_stmt_get_result($stmt);
 
-      if ($result && mysqli_num_rows($result) > 0) {
-
-        $user = mysqli_fetch_assoc($result);
+      if ($result && $user = mysqli_fetch_assoc($result)) {
 
         if (password_verify($password, $user['password'])) {
 
           if ((int)$user['is_active'] === 1) {
 
             session_regenerate_id(true);
+
             $_SESSION['login_attempt'] = 0;
 
             $_SESSION['login'] = true;
-            $_SESSION['user_id'] = $user['id'];
-            $_SESSION['name'] = htmlspecialchars($user['name']);
-            $_SESSION['role'] = htmlspecialchars($user['role']);
+            $_SESSION['user_id'] = (int)$user['id'];
+
+            /* SIMPAN RAW (AMAN, ESCAPE DI VIEW) */
+            $_SESSION['name'] = $user['name'];
+            $_SESSION['role'] = $user['role'];
 
             header("Location: index.php");
             exit;
@@ -60,11 +88,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
           }
         } else {
           $_SESSION['login_attempt']++;
-          $error = "Incorrect email or password. Please try again.";
+          $error = "Invalid login details. Please check your credentials and try again.";
         }
       } else {
         $_SESSION['login_attempt']++;
-        $error = "Incorrect email or password. Please try again.";
+        $error = "Invalid login details. Please check your credentials and try again.";
       }
 
       mysqli_stmt_close($stmt);
@@ -432,20 +460,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
                   <?php if (!empty($error)) : ?>
                     <div class="alert alert-danger text-center">
-                      <?php echo htmlspecialchars($error); ?>
+                      <?php echo htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?>
                     </div>
                   <?php endif; ?>
 
-                  <form method="POST" class="row g-3">
-
+                  <form method="POST" class="row g-3" autocomplete="off">
                     <div class="col-12">
                       <label class="form-label">Email</label>
-                      <input type="email" name="email" class="form-control" required>
+                      <input type="email" name="email" class="form-control" required autocomplete="off">
                     </div>
 
                     <div class="col-12">
                       <label class="form-label">Password</label>
-                      <input type="password" name="password" class="form-control" required>
+                      <input type="password" name="password" class="form-control" required autocomplete="new-password">
                     </div>
 
                     <div class="col-12">

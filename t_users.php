@@ -1,101 +1,151 @@
 <?php
-session_start();
 
+declare(strict_types=1);
+
+/* =========================
+   SESSION SECURITY
+========================= */
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'secure' => isset($_SERVER['HTTPS']),
+    'httponly' => true,
+    'samesite' => 'Strict'
+]);
+
+session_start();
 require_once 'koneksi.php';
 
-// SECURITY HEADER
+/* =========================
+   CSRF TOKEN
+========================= */
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+/* =========================
+   SECURITY HEADERS
+========================= */
 header("X-Frame-Options: SAMEORIGIN");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 
-// CEK LOGIN
-if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
-
+/* =========================
+   AUTH CHECK
+========================= */
+if (empty($_SESSION['login']) || empty($_SESSION['user_id'])) {
     session_unset();
     session_destroy();
-
     header("Location: login.php");
     exit;
 }
 
-// SESSION TIMEOUT
+/* =========================
+   SESSION TIMEOUT
+========================= */
 $timeout = 1800;
 
-if (isset($_SESSION['last_activity'])) {
-
-    if ((time() - $_SESSION['last_activity']) > $timeout) {
-
-        session_unset();
-        session_destroy();
-
-        header("Location: login.php?timeout=1");
-        exit;
-    }
+if (!empty($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout) {
+    session_unset();
+    session_destroy();
+    header("Location: login.php?timeout=1");
+    exit;
 }
 
 $_SESSION['last_activity'] = time();
 
-// VALIDASI USER ID
-if (!isset($_SESSION['user_id'])) {
-
-    session_unset();
-    session_destroy();
-
-    header("Location: login.php");
-    exit;
+/* =========================
+   XSS HELPER
+========================= */
+function e(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 }
 ?>
 <?php
-include "koneksi.php";
 
-if (isset($_POST['simpan'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['simpan'])) {
 
-    $name      = mysqli_real_escape_string($conn, $_POST['name']);
-    $email     = mysqli_real_escape_string($conn, $_POST['email']);
-    $password  = $_POST['password'];
-    $role      = $_POST['role'];
-    $is_active = $_POST['is_active'];
-
-    // validasi email tidak boleh sama
-    $cek = mysqli_query($conn, "SELECT * FROM users WHERE email='$email'");
-
-    if (mysqli_num_rows($cek) > 0) {
-        echo "<script>
-                alert('Email sudah terdaftar!');
-                window.location='users.php';
-              </script>";
+    /* =========================
+       CSRF CHECK (WAJIB)
+    ========================= */
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        $_SESSION['flash_error'] = "Token tidak valid!";
+        header("Location: users.php");
         exit;
     }
 
-    // hash password
-    if (!empty($password)) {
-        $password_hash = password_hash($password, PASSWORD_DEFAULT);
-    } else {
-        echo "<script>
-                alert('Password wajib diisi!');
-                window.location='users.php';
-              </script>";
+    /* =========================
+       INPUT SANITIZATION
+    ========================= */
+    $name      = trim($_POST['name'] ?? '');
+    $email     = trim($_POST['email'] ?? '');
+    $password  = $_POST['password'] ?? '';
+    $role      = $_POST['role'] ?? '';
+    $is_active = (int)($_POST['is_active'] ?? 1);
+
+    /* =========================
+       VALIDASI
+    ========================= */
+    if ($name === '' || $email === '' || $password === '' || $role === '') {
+        $_SESSION['flash_error'] = "Semua field wajib diisi!";
+        header("Location: users.php");
         exit;
     }
 
-    // insert data
-    $query = mysqli_query($conn, "INSERT INTO users 
-        (name, email, password, role, is_active)
-        VALUES 
-        ('$name', '$email', '$password_hash', '$role', '$is_active')
-    ");
+    /* =========================
+       CEK EMAIL DUPLIKAT
+    ========================= */
+    $check = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ?");
+    mysqli_stmt_bind_param($check, "s", $email);
+    mysqli_stmt_execute($check);
+    mysqli_stmt_store_result($check);
 
-    if ($query) {
-        echo "<script>
-                alert('User berhasil ditambahkan!');
-                window.location='users.php';
-              </script>";
-    } else {
-        echo "<script>
-                alert('User gagal ditambahkan!');
-                window.location='users.php';
-              </script>";
+    if (mysqli_stmt_num_rows($check) > 0) {
+        mysqli_stmt_close($check);
+
+        $_SESSION['flash_error'] = "Email sudah terdaftar!";
+        header("Location: users.php");
+        exit;
     }
+
+    mysqli_stmt_close($check);
+
+    /* =========================
+       HASH PASSWORD
+    ========================= */
+    $password_hash = password_hash($password, PASSWORD_DEFAULT);
+
+    /* =========================
+       INSERT USER
+    ========================= */
+    $insert = mysqli_prepare(
+        $conn,
+        "INSERT INTO users (name, email, password, role, is_active)
+         VALUES (?, ?, ?, ?, ?)"
+    );
+
+    mysqli_stmt_bind_param(
+        $insert,
+        "ssssi",
+        $name,
+        $email,
+        $password_hash,
+        $role,
+        $is_active
+    );
+
+    if (mysqli_stmt_execute($insert)) {
+        $_SESSION['flash_success'] = "User berhasil ditambahkan!";
+    } else {
+        error_log("Insert user gagal: " . mysqli_error($conn));
+        $_SESSION['flash_error'] = "Terjadi kesalahan sistem!";
+    }
+
+    mysqli_stmt_close($insert);
+
+    header("Location: users.php");
+    exit;
 }
 ?>
 <!DOCTYPE html>
@@ -128,6 +178,40 @@ if (isset($_POST['simpan'])) {
 
     <!-- Template Main CSS File -->
     <link href="assets/css/style.css" rel="stylesheet">
+    <!-- =========================
+     CUSTOM FONT
+========================= -->
+    <style>
+        /* FORCE ALL ELEMENT FONT */
+        body {
+            font-family: Helvetica, Arial, sans-serif !important;
+        }
+
+        body * {
+            font-family: inherit !important;
+        }
+
+        .logo span,
+        .sidebar,
+        .nav-link,
+        .dropdown-item,
+        .card,
+        .card-title,
+        table,
+        th,
+        td,
+        input,
+        select,
+        textarea,
+        button {
+            font-family: inherit !important;
+        }
+
+        body {
+            font-weight: 400;
+            letter-spacing: 0.2px;
+        }
+    </style>
 
 </head>
 
@@ -154,8 +238,8 @@ if (isset($_POST['simpan'])) {
 
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
                         <li class="dropdown-header">
-                            <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
-                            <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
+                            <?= htmlspecialchars($_SESSION['name'] ?? 'User', ENT_QUOTES, 'UTF-8') ?>
+                            <?= htmlspecialchars($_SESSION['role'] ?? 'Role', ENT_QUOTES, 'UTF-8') ?>
                         </li>
                         <li>
                             <hr class="dropdown-divider" />
@@ -238,21 +322,45 @@ if (isset($_POST['simpan'])) {
                         <h5 class="card-title">Tambah User</h5>
 
                         <form class="row g-3" method="post">
+
+                            <!-- CSRF PROTECTION -->
+                            <input type="hidden" name="csrf_token"
+                                value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+
+                            <!-- NAMA -->
                             <div class="col-12">
                                 <label for="name" class="form-label">Nama</label>
-                                <input type="text" class="form-control" id="name" name="name" required>
+                                <input type="text"
+                                    class="form-control"
+                                    id="name"
+                                    name="name"
+                                    required
+                                    autocomplete="off">
                             </div>
 
+                            <!-- EMAIL -->
                             <div class="col-12">
                                 <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" required>
+                                <input type="email"
+                                    class="form-control"
+                                    id="email"
+                                    name="email"
+                                    required
+                                    autocomplete="off">
                             </div>
 
+                            <!-- PASSWORD -->
                             <div class="col-12">
                                 <label for="password" class="form-label">Password</label>
-                                <input type="password" class="form-control" id="password" name="password">
+                                <input type="password"
+                                    class="form-control"
+                                    id="password"
+                                    name="password"
+                                    required
+                                    autocomplete="new-password">
                             </div>
 
+                            <!-- ROLE -->
                             <div class="col-12">
                                 <label for="role" class="form-label">Role</label>
                                 <select class="form-control" name="role" required>
@@ -262,6 +370,7 @@ if (isset($_POST['simpan'])) {
                                 </select>
                             </div>
 
+                            <!-- STATUS -->
                             <div class="col-12">
                                 <label for="is_active" class="form-label">Status</label>
                                 <select class="form-control" name="is_active">
@@ -270,12 +379,12 @@ if (isset($_POST['simpan'])) {
                                 </select>
                             </div>
 
+                            <!-- BUTTONS (CLEAN VERSION) -->
                             <div class="text-center">
-                                <button type="button" class="btn btn-warning">
-                                    <a href="users.php" style="color: black; text-decoration:none;">
-                                        Kembali
-                                    </a>
-                                </button>
+
+                                <a href="users.php" class="btn btn-warning">
+                                    Kembali
+                                </a>
 
                                 <button type="reset" class="btn btn-secondary">
                                     Reset
@@ -284,6 +393,7 @@ if (isset($_POST['simpan'])) {
                                 <button type="submit" class="btn btn-success" name="simpan">
                                     Simpan
                                 </button>
+
                             </div>
 
                         </form>

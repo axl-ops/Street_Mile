@@ -1,49 +1,110 @@
 <?php
+
+declare(strict_types=1);
+
+/*
+|--------------------------------------------------------------------------
+| SESSION SECURITY
+|--------------------------------------------------------------------------
+*/
+session_set_cookie_params([
+  'lifetime' => 0,
+  'path' => '/',
+  'domain' => '',
+  'secure' => isset($_SERVER['HTTPS']),
+  'httponly' => true,
+  'samesite' => 'Strict'
+]);
+
 session_start();
 
+/*
+|--------------------------------------------------------------------------
+| DATABASE CONNECTION
+|--------------------------------------------------------------------------
+*/
 require_once 'koneksi.php';
 
-// SECURITY HEADER
-header("X-Frame-Options: SAMEORIGIN");
-header("X-Content-Type-Options: nosniff");
-header("Referrer-Policy: strict-origin-when-cross-origin");
+/*
+|--------------------------------------------------------------------------
+| TIMEZONE
+|--------------------------------------------------------------------------
+*/
+date_default_timezone_set('Asia/Jakarta');
 
-// CEK LOGIN
-if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
+/*
+|--------------------------------------------------------------------------
+| SECURITY HEADERS
+|--------------------------------------------------------------------------
+*/
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('X-XSS-Protection: 1; mode=block');
+header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';");
 
-    session_unset();
-    session_destroy();
+/*
+|--------------------------------------------------------------------------
+| MYSQL ERROR MODE
+|--------------------------------------------------------------------------
+*/
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-    header("Location: login.php");
-    exit;
+/*
+|--------------------------------------------------------------------------
+| SESSION VALIDATION
+|--------------------------------------------------------------------------
+*/
+if (
+  empty($_SESSION['login']) ||
+  $_SESSION['login'] !== true ||
+  empty($_SESSION['user_id'])
+) {
+
+  session_unset();
+  session_destroy();
+
+  header('Location: login.php');
+  exit;
 }
 
-// SESSION TIMEOUT
+/*
+|--------------------------------------------------------------------------
+| SESSION TIMEOUT
+|--------------------------------------------------------------------------
+*/
 $timeout = 1800;
 
-if (isset($_SESSION['last_activity'])) {
+if (
+  isset($_SESSION['last_activity']) &&
+  (time() - $_SESSION['last_activity']) > $timeout
+) {
 
-    if ((time() - $_SESSION['last_activity']) > $timeout) {
+  session_unset();
+  session_destroy();
 
-        session_unset();
-        session_destroy();
-
-        header("Location: login.php?timeout=1");
-        exit;
-    }
+  header('Location: login.php?timeout=1');
+  exit;
 }
 
 $_SESSION['last_activity'] = time();
 
-// VALIDASI USER ID
-if (!isset($_SESSION['user_id'])) {
-
-    session_unset();
-    session_destroy();
-
-    header("Location: login.php");
-    exit;
-}
+/*
+|--------------------------------------------------------------------------
+| QUERY PRODUK
+|--------------------------------------------------------------------------
+*/
+$sql = mysqli_query(
+  $conn,
+  "SELECT
+        p.*,
+        c.category_name
+    FROM products p
+    LEFT JOIN categories c
+        ON p.category_id = c.id
+    ORDER BY p.id DESC"
+);
 ?>
 
 <!DOCTYPE html>
@@ -76,6 +137,49 @@ if (!isset($_SESSION['user_id'])) {
 
   <!-- Template Main CSS File -->
   <link href="assets/css/style.css" rel="stylesheet">
+  <style>
+    :root {
+      --main-font: Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      font-family: var(--main-font);
+      letter-spacing: 0.2px;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    p,
+    a,
+    li,
+    table,
+    th,
+    td,
+    button,
+    input,
+    select,
+    textarea,
+    label,
+    span,
+    .card-title,
+    .nav-link,
+    .dropdown-item,
+    .breadcrumb,
+    .datatable-wrapper,
+    .datatable-table,
+    .datatable-input,
+    .datatable-selector {
+      font-family: inherit;
+    }
+
+    .logo span {
+      font-family: Helvetica, Arial, sans-serif !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -102,8 +206,13 @@ if (!isset($_SESSION['user_id'])) {
 
           <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
             <li class="dropdown-header">
-              <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
-              <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
+              <h6>
+                <?= htmlspecialchars($_SESSION['name'] ?? 'User'); ?>
+              </h6>
+
+              <span>
+                <?= htmlspecialchars($_SESSION['role'] ?? 'Role'); ?>
+              </span>
             </li>
             <li>
               <hr class="dropdown-divider" />
@@ -123,7 +232,7 @@ if (!isset($_SESSION['user_id'])) {
   </header><!-- End Header -->
 
   <!-- ======= Sidebar ======= -->
-   <aside id="sidebar" class="sidebar">
+  <aside id="sidebar" class="sidebar">
 
     <ul class="sidebar-nav" id="sidebar-nav">
 
@@ -175,16 +284,16 @@ if (!isset($_SESSION['user_id'])) {
         </ol>
       </nav>
     </div><!-- End Page Title -->
-      <div class="row">
-        <div class="col-lg-12">
-          <div class="card">
-            <div class="card-body mt-3">
-              <a href="t_produk.php" class="btn btn-primary">Tambah Data</a>
-              <a href="stok.php" class="btn btn-dark">Stok</a>
-            </div>
+    <div class="row">
+      <div class="col-lg-12">
+        <div class="card">
+          <div class="card-body mt-3">
+            <a href="t_produk.php" class="btn btn-primary">Tambah Data</a>
+            <a href="stok.php" class="btn btn-dark">Stok</a>
           </div>
         </div>
       </div>
+    </div>
     <section class="section">
       <div class="row">
         <div class="col-lg-12">
@@ -206,34 +315,94 @@ if (!isset($_SESSION['user_id'])) {
                   </tr>
                 </thead>
                 <tbody>
-                 <?php
-                include "koneksi.php";
-                $no = 1;
-                $sql = mysqli_query($conn, "
-                    SELECT p.*, c.category_name
-                    FROM products p
-                    LEFT JOIN categories c
-                    ON p.category_id = c.id
-                ");
 
-                while ($data = mysqli_fetch_array($sql)) {
-                ?>
-                <tr>
-                  <td><?php echo $no++; ?></td>
-                  <td><?php echo $data['product_code']; ?></td>
-                  <td><?php echo $data['product_name']; ?></td>
-                  <td><?php echo $data['category_name']; ?></td>
-                  <td><?php echo $data['stock']; ?></td>
-                  <td>Rp <?php echo number_format($data['price'],0,',','.'); ?></td>
-                  <td>
-                    <img src="produk_img/<?php echo $data['gambar']; ?>" width="50" class="rounded">
-                  </td>
-                  <td>
-                    <a href="e_produk.php?id=<?php echo $data['id']; ?>" class="btn btn-warning btn-sm">Edit</a>
-                    <a href="h_produk.php?id=<?php echo $data['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Apakah Anda yakin?')">Hapus</a>
-                  </td>
-                </tr>
-                <?php } ?>
+                  <?php if ($sql instanceof mysqli_result && mysqli_num_rows($sql) > 0): ?>
+
+                    <?php $no = 1; ?>
+
+                    <?php while ($data = mysqli_fetch_assoc($sql)): ?>
+
+                      <tr>
+
+                        <td>
+                          <?= (int) $no++; ?>
+                        </td>
+
+                        <td>
+                          <?= htmlspecialchars($data['product_code'], ENT_QUOTES, 'UTF-8'); ?>
+                        </td>
+
+                        <td>
+                          <?= htmlspecialchars($data['product_name'], ENT_QUOTES, 'UTF-8'); ?>
+                        </td>
+
+                        <td>
+                          <?= htmlspecialchars($data['category_name'] ?? '-', ENT_QUOTES, 'UTF-8'); ?>
+                        </td>
+
+                        <td>
+                          <?= (int) $data['stock']; ?>
+                        </td>
+
+                        <td>
+                          Rp <?= number_format((float) $data['price'], 0, ',', '.'); ?>
+                        </td>
+
+                        <td>
+
+                          <?php
+                          $gambar = (!empty($data['gambar']) && file_exists('produk_img/' . $data['gambar']))
+                            ? 'produk_img/' . $data['gambar']
+                            : 'assets/img/no-image.png';
+                          ?>
+
+                          <img
+                            src="<?= htmlspecialchars($gambar, ENT_QUOTES, 'UTF-8'); ?>"
+                            width="50"
+                            class="rounded"
+                            alt="Produk">
+
+                        </td>
+
+                        <td>
+
+                          <!-- EDIT -->
+                          <a
+                            href="e_produk.php?id=<?= (int) $data['id']; ?>"
+                            class="btn btn-warning btn-sm">
+                            Edit
+                          </a>
+
+                          <!-- DELETE (FIXED: POST + CSRF + NO ERROR) -->
+                          <form method="POST" action="h_produk.php" style="display:inline-block;">
+
+                            <input type="hidden" name="id" value="<?= (int) $data['id']; ?>">
+                            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token']; ?>">
+
+                            <button type="submit"
+                              class="btn btn-danger btn-sm"
+                              onclick="return confirm('Apakah Anda yakin ingin menghapus data ini?')">
+
+                              Hapus
+                            </button>
+
+                          </form>
+
+                        </td>
+
+                      </tr>
+
+                    <?php endwhile; ?>
+                  <?php else: ?>
+
+                    <tr>
+                      <td colspan="8" class="text-center text-muted">
+                        Data produk tidak tersedia
+                      </td>
+                    </tr>
+
+                  <?php endif; ?>
+
                 </tbody>
               </table>
               <!-- End Table with stripped rows -->
@@ -253,7 +422,7 @@ if (!isset($_SESSION['user_id'])) {
       &copy; Copyright <strong><span>Street Mile</span></strong>. All Rights Reserved
     </div>
     <div class="credits">
-      Designed by <a href="https://www.instagram.com/axelwavehassle/">axelindrayudha</a>
+      Designed by <a href="https://www.instagram.com/axelwavehassle/">Axel Indra Yudha</a>
     </div>
   </footer><!-- End Footer -->
 

@@ -3,6 +3,8 @@ session_start();
 
 require_once 'koneksi.php';
 
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
 // SECURITY HEADER
 header("X-Frame-Options: SAMEORIGIN");
 header("X-Content-Type-Options: nosniff");
@@ -11,11 +13,11 @@ header("Referrer-Policy: strict-origin-when-cross-origin");
 // CEK LOGIN
 if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
 
-    session_unset();
-    session_destroy();
+  session_unset();
+  session_destroy();
 
-    header("Location: login.php");
-    exit;
+  header("Location: login.php");
+  exit;
 }
 
 // SESSION TIMEOUT
@@ -23,14 +25,14 @@ $timeout = 1800;
 
 if (isset($_SESSION['last_activity'])) {
 
-    if ((time() - $_SESSION['last_activity']) > $timeout) {
+  if ((time() - $_SESSION['last_activity']) > $timeout) {
 
-        session_unset();
-        session_destroy();
+    session_unset();
+    session_destroy();
 
-        header("Location: login.php?timeout=1");
-        exit;
-    }
+    header("Location: login.php?timeout=1");
+    exit;
+  }
 }
 
 $_SESSION['last_activity'] = time();
@@ -38,47 +40,159 @@ $_SESSION['last_activity'] = time();
 // VALIDASI USER ID
 if (!isset($_SESSION['user_id'])) {
 
-    session_unset();
-    session_destroy();
+  session_unset();
+  session_destroy();
 
-    header("Location: login.php");
-    exit;
+  header("Location: login.php");
+  exit;
 }
 
 if (isset($_POST['submit'])) {
 
-  $product_id = $_POST['product_id'];
-  $change_type = $_POST['change_type'];
-  $qty = intval($_POST['qty']);
-  $note = $_POST['note'];
-  $user_id = $_SESSION['user_id'];
+  /*
+    |--------------------------------------------------------------------------
+    | VALIDASI INPUT
+    |--------------------------------------------------------------------------
+    */
+  $product_id = (int) ($_POST['product_id'] ?? 0);
 
-  // Ambil stok sekarang
-  $q = mysqli_query($conn, "SELECT stock FROM products WHERE id = '$product_id'");
-  $data = mysqli_fetch_assoc($q);
+  $change_type = trim($_POST['change_type'] ?? '');
 
-  $stock_before = $data['stock'];
+  $qty = (int) ($_POST['qty'] ?? 0);
 
-  // Hitung stok baru
-  if ($change_type == 'ADD') {
-    $stock_after = $stock_before + $qty;
+  $note = trim($_POST['note'] ?? '');
+
+  $user_id = (int) ($_SESSION['user_id'] ?? 0);
+
+  /*
+    |--------------------------------------------------------------------------
+    | VALIDASI DASAR
+    |--------------------------------------------------------------------------
+    */
+  if (
+    $product_id <= 0 ||
+    $qty <= 0 ||
+    !in_array($change_type, ['ADD', 'REDUCE'], true)
+  ) {
+
+    echo "<script>alert('Data tidak valid!');</script>";
   } else {
-    $stock_after = $stock_before - $qty;
-    if ($stock_after < 0) {
-      echo "<script>alert('Stok tidak cukup');</script>";
+
+    /*
+        |--------------------------------------------------------------------------
+        | AMBIL STOK PRODUK
+        |--------------------------------------------------------------------------
+        */
+    $stmt = mysqli_prepare(
+      $conn,
+      "SELECT stock FROM products WHERE id = ? LIMIT 1"
+    );
+
+    mysqli_stmt_bind_param($stmt, "i", $product_id);
+
+    mysqli_stmt_execute($stmt);
+
+    $result = mysqli_stmt_get_result($stmt);
+
+    $data = mysqli_fetch_assoc($result);
+
+    mysqli_stmt_close($stmt);
+
+    /*
+        |--------------------------------------------------------------------------
+        | VALIDASI PRODUK
+        |--------------------------------------------------------------------------
+        */
+    if (!$data) {
+
+      echo "<script>alert('Produk tidak ditemukan!');</script>";
+    } else {
+
+      $stock_before = (int) $data['stock'];
+
+      /*
+            |--------------------------------------------------------------------------
+            | HITUNG STOK BARU
+            |--------------------------------------------------------------------------
+            */
+      if ($change_type === 'ADD') {
+
+        $stock_after = $stock_before + $qty;
+      } else {
+
+        $stock_after = $stock_before - $qty;
+
+        if ($stock_after < 0) {
+
+          echo "<script>alert('Stok tidak cukup!');</script>";
+
+          exit;
+        }
+      }
+
+      /*
+            |--------------------------------------------------------------------------
+            | UPDATE STOK
+            |--------------------------------------------------------------------------
+            */
+      $stmtUpdate = mysqli_prepare(
+        $conn,
+        "UPDATE products
+                 SET stock = ?
+                 WHERE id = ?"
+      );
+
+      mysqli_stmt_bind_param(
+        $stmtUpdate,
+        "ii",
+        $stock_after,
+        $product_id
+      );
+
+      mysqli_stmt_execute($stmtUpdate);
+
+      mysqli_stmt_close($stmtUpdate);
+
+      /*
+            |--------------------------------------------------------------------------
+            | INSERT LOG STOK
+            |--------------------------------------------------------------------------
+            */
+      $stmtLog = mysqli_prepare(
+        $conn,
+        "INSERT INTO stock_logs
+                (
+                    product_id,
+                    change_type,
+                    qty,
+                    stock_before,
+                    stock_after,
+                    note,
+                    created_by
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+
+      mysqli_stmt_bind_param(
+        $stmtLog,
+        "isiiisi",
+        $product_id,
+        $change_type,
+        $qty,
+        $stock_before,
+        $stock_after,
+        $note,
+        $user_id
+      );
+
+      mysqli_stmt_execute($stmtLog);
+
+      mysqli_stmt_close($stmtLog);
+
+      header("Location: stok.php?success=1");
       exit;
     }
   }
-
-  // Update stok
-  mysqli_query($conn, "UPDATE products SET stock = '$stock_after' WHERE id = '$product_id'");
-
-  // insert log
-  mysqli_query($conn, "INSERT INTO stock_logs (product_id, change_type, qty, stock_before, stock_after, note, created_by) 
-                      VALUES ('$product_id', '$change_type', '$qty', '$stock_before', '$stock_after', '$note', '$user_id')");
-
-                      header("Location: stok.php?success=1");
-                      exit;
 }
 ?>
 <!DOCTYPE html>
@@ -111,14 +225,39 @@ if (isset($_POST['submit'])) {
 
   <!-- Template Main CSS File -->
   <link href="assets/css/style.css" rel="stylesheet">
+  <style>
+    body,
+    button,
+    input,
+    select,
+    textarea,
+    .table,
+    .card,
+    .nav-link,
+    .dropdown-menu,
+    .badge,
+    .btn,
+    .pagetitle,
+    .breadcrumb,
+    .header,
+    .sidebar,
+    .footer {
+      font-family: Helvetica, Arial, sans-serif !important;
+    }
+
+    /* Logo kiri atas */
+    .logo span {
+      font-family: Helvetica, Arial, sans-serif !important;
+    }
+  </style>
 </head>
 
 <body>
-<?php if (isset($_GET['success'])): ?>
-  <script>
-    alert('Stok berhasil diperbarui!');
-  </script>
-<?php endif; ?>
+  <?php if (isset($_GET['success'])): ?>
+    <script>
+      alert('Stok berhasil diperbarui!');
+    </script>
+  <?php endif; ?>
   <!-- ======= Header ======= -->
   <header id="header" class="header fixed-top d-flex align-items-center">
 
@@ -162,7 +301,7 @@ if (isset($_POST['submit'])) {
   </header><!-- End Header -->
 
   <!-- ======= Sidebar ======= -->
-   <aside id="sidebar" class="sidebar">
+  <aside id="sidebar" class="sidebar">
 
     <ul class="sidebar-nav" id="sidebar-nav">
 
@@ -224,35 +363,45 @@ if (isset($_POST['submit'])) {
             <div class="card-body">
               <h5 class="card-title">Manajemen Stok</h5>
               <form method="post">
-              <div class="mb-3">
-                <label class="form-label">Pilih Produk</label>
-                <select name="product_id" class="form-select" required>
-                  <option value="">-- Pilih Produk --</option>
-                  <?php
-                  include 'koneksi.php';
-                  $produk = mysqli_query($conn, "SELECT * FROM products");
-                  while ($p = mysqli_fetch_assoc($produk)) {
-                    echo "<option value='{$p['id']}'>{$p['product_name']}</option>";
-                  }
-                  ?>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Jenis Aksi</label>
-                <select name="change_type" class="form-select">
-                  <option value="ADD">Tambah Stok</option>
-                  <option value="REDUCE">Kurangi Stok</option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Jumlah</label>
-                <input type="number" name="qty" class="form-control" required>
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Catatan</label>
-                <textarea name="note" class="form-control" rows="2"></textarea>
-              </div>
-              <button type="submit" name="submit" class="btn btn-primary">Simpan Perubahan</button>
+                <div class="mb-3">
+                  <label class="form-label">Pilih Produk</label>
+                  <select name="product_id" class="form-select" required>
+                    <option value="">-- Pilih Produk --</option>
+                    <?php
+                    $produk = mysqli_query(
+                      $conn,
+                      "SELECT id, product_name
+     FROM products
+     ORDER BY product_name ASC"
+                    );
+
+                    while ($p = mysqli_fetch_assoc($produk)):
+                    ?>
+
+                      <option value="<?= (int) $p['id']; ?>">
+                        <?= htmlspecialchars($p['product_name']); ?>
+                      </option>
+
+                    <?php endwhile; ?>
+                    ?>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Jenis Aksi</label>
+                  <select name="change_type" class="form-select">
+                    <option value="ADD">Tambah Stok</option>
+                    <option value="REDUCE">Kurangi Stok</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Jumlah</label>
+                  <input type="number" name="qty" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Catatan</label>
+                  <textarea name="note" class="form-control" rows="2"></textarea>
+                </div>
+                <button type="submit" name="submit" class="btn btn-primary">Simpan Perubahan</button>
               </form>
             </div>
           </div>
@@ -276,22 +425,67 @@ if (isset($_POST['submit'])) {
                 </thead>
                 <tbody>
                   <?php
-                  $query = mysqli_query($conn, "SELECT sl.*, p.product_name, u.name FROM stock_logs sl 
-                            JOIN products p ON sl.product_id = p.id 
-                            JOIN users u ON sl.created_by = u.id 
-                            ORDER BY sl.created_at DESC");
-                  while ($row = mysqli_fetch_assoc($query)) {
-                    $badge = $row['change_type'] == 'ADD'
-                    ? "<span class='badge bg-success'>+ (ADD)</span>"
-                    : "<span class='badge bg-danger'>- (REDUCE)</span>";
-                    echo "<tr>
-                            <td>" . date('d M Y H:i', strtotime($row['created_at'])) . "</td>
-                            <td>{$row['product_name']}</td>
-                            <td>{$badge}</td>
-                            <td>{$row['qty']}</td>
-                            <td>{$row['name']}</td>
-                          </tr>";
-                  }
+
+                  $query = mysqli_query(
+                    $conn,
+                    "SELECT
+        sl.*,
+        p.product_name,
+        u.name
+     FROM stock_logs sl
+     INNER JOIN products p
+        ON sl.product_id = p.id
+     INNER JOIN users u
+        ON sl.created_by = u.id
+     ORDER BY sl.created_at DESC"
+                  );
+
+                  if ($query instanceof mysqli_result && mysqli_num_rows($query) > 0):
+
+                    while ($row = mysqli_fetch_assoc($query)):
+
+                      $badge = $row['change_type'] === 'ADD'
+                        ? "<span class='badge bg-success'>+ (ADD)</span>"
+                        : "<span class='badge bg-danger'>- (REDUCE)</span>";
+                  ?>
+
+                      <tr>
+
+                        <td>
+                          <?= date('d M Y H:i', strtotime($row['created_at'])); ?>
+                        </td>
+
+                        <td>
+                          <?= htmlspecialchars($row['product_name']); ?>
+                        </td>
+
+                        <td>
+                          <?= $badge; ?>
+                        </td>
+
+                        <td>
+                          <?= (int) $row['qty']; ?>
+                        </td>
+
+                        <td>
+                          <?= htmlspecialchars($row['name']); ?>
+                        </td>
+
+                      </tr>
+
+                    <?php
+                    endwhile;
+
+                  else:
+                    ?>
+
+                    <tr>
+                      <td colspan="5" class="text-center text-muted">
+                        Riwayat stok tidak tersedia
+                      </td>
+                    </tr>
+
+                  <?php endif; ?>
                   ?>
                 </tbody>
               </table>

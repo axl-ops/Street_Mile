@@ -1,66 +1,102 @@
 <?php
-session_start();
 
+declare(strict_types=1);
+
+session_start();
 require_once 'koneksi.php';
 
-// SECURITY HEADER
+/* =========================
+   SECURITY HEADERS
+========================= */
 header("X-Frame-Options: SAMEORIGIN");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 
-// CEK LOGIN
-if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
-
+/* =========================
+   AUTH CHECK
+========================= */
+if (empty($_SESSION['login']) || empty($_SESSION['user_id'])) {
     session_unset();
     session_destroy();
-
     header("Location: login.php");
     exit;
 }
 
-// SESSION TIMEOUT
+/* =========================
+   SESSION TIMEOUT
+========================= */
 $timeout = 1800;
 
-if (isset($_SESSION['last_activity'])) {
-
-    if ((time() - $_SESSION['last_activity']) > $timeout) {
-
-        session_unset();
-        session_destroy();
-
-        header("Location: login.php?timeout=1");
-        exit;
-    }
-}
-
-$_SESSION['last_activity'] = time();
-
-// VALIDASI USER ID
-if (!isset($_SESSION['user_id'])) {
-
+if (!empty($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout) {
     session_unset();
     session_destroy();
-
-    header("Location: login.php");
+    header("Location: login.php?timeout=1");
     exit;
 }
-?>
-<?php
-include "koneksi.php";
-$id = $_GET['id'];
-$sql = mysqli_query($conn, "SELECT * FROM categories WHERE id = '$id'");
-$hasil = mysqli_fetch_array($sql);
-if (isset($_POST['update'])) {
-    $nm_kat = $_POST['nm_kat'];
+$_SESSION['last_activity'] = time();
 
-    $query = mysqli_query($conn, "UPDATE categories SET category_name = '$nm_kat' WHERE id='$id'");
-    if ($query) {
-        echo "<script>alert('Data berhasil diubah! ')</script>";
-        header("refresh:0, kategori_produk.php");
+/* =========================
+   XSS HELPER
+========================= */
+function e(string $v): string
+{
+    return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+}
+
+/* =========================
+   VALID ID
+========================= */
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+
+if ($id <= 0) {
+    header("Location: kategori_produk.php?error=invalid_id");
+    exit;
+}
+
+/* =========================
+   GET CATEGORY DATA (SAFE)
+========================= */
+$stmt = mysqli_prepare($conn, "SELECT * FROM categories WHERE id = ?");
+mysqli_stmt_bind_param($stmt, "i", $id);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
+$hasil = mysqli_fetch_assoc($result);
+mysqli_stmt_close($stmt);
+
+if (!$hasil) {
+    header("Location: kategori_produk.php?error=not_found");
+    exit;
+}
+
+/* =========================
+   UPDATE HANDLER
+========================= */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
+
+    $nm_kat = trim($_POST['nm_kat'] ?? '');
+
+    if ($nm_kat === '') {
+        header("Location: e_kat.php?id=$id&error=empty");
+        exit;
+    }
+
+    $stmt = mysqli_prepare($conn, "
+        UPDATE categories 
+        SET category_name = ? 
+        WHERE id = ?
+    ");
+
+    mysqli_stmt_bind_param($stmt, "si", $nm_kat, $id);
+
+    if (mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        header("Location: kategori_produk.php?success=1");
+        exit;
     } else {
-        echo "<script>alert('Data gagal diubah!')</script>";
-        header("refresh:0, kategori_produk.php");
-
+        error_log("Update kategori error: " . mysqli_error($conn));
+        mysqli_stmt_close($stmt);
+        header("Location: kategori_produk.php?error=1");
+        exit;
     }
 }
 ?>
@@ -94,6 +130,23 @@ if (isset($_POST['update'])) {
 
     <!-- Template Main CSS File -->
     <link href="assets/css/style.css" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: Helvetica, Arial, sans-serif !important;
+        }
+
+        .logo span {
+            font-family: Helvetica, Arial, sans-serif !important;
+        }
+
+        input,
+        select,
+        textarea,
+        button {
+            font-family: inherit !important;
+        }
+    </style>
 </head>
 
 <body>
@@ -110,7 +163,7 @@ if (isset($_POST['update'])) {
         </div><!-- End Logo -->
 
 
-         <nav class="header-nav ms-auto">
+        <nav class="header-nav ms-auto">
             <ul class="d-flex align-items-center">
                 <li class="nav-item dropdown pe-3">
 

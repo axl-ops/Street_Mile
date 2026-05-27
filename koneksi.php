@@ -1,19 +1,35 @@
 <?php
 
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
 $host = "localhost";
 $user = "root";
 $pass = "";
 $db   = "axel25550005";
 
-// Membuat koneksi
+/*
+|--------------------------------------------------------------------------
+| KONEKSI DATABASE
+|--------------------------------------------------------------------------
+*/
 $conn = mysqli_connect($host, $user, $pass, $db);
 
-// Cek koneksi
+/*
+|--------------------------------------------------------------------------
+| CEK KONEKSI
+|--------------------------------------------------------------------------
+*/
 if (!$conn) {
+
     die("Koneksi database gagal.");
 }
 
-// Set charset UTF-8
-mysqli_set_charset($conn, "utf8mb4");
+/*
+|--------------------------------------------------------------------------
+| SET CHARSET UTF-8
+|--------------------------------------------------------------------------
+*/
+if (!mysqli_set_charset($conn, "utf8mb4")) {
 
-?>
+    die("Gagal mengatur charset database.");
+}

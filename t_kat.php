@@ -1,75 +1,173 @@
 <?php
+
+declare(strict_types=1);
+
+/*
+|--------------------------------------------------------------------------
+| SESSION SECURITY
+|--------------------------------------------------------------------------
+*/
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'domain' => '',
+    'secure' => isset($_SERVER['HTTPS']),
+    'httponly' => true,
+    'samesite' => 'Strict'
+]);
+
 session_start();
 
+/*
+|--------------------------------------------------------------------------
+| DATABASE CONNECTION
+|--------------------------------------------------------------------------
+*/
 require_once 'koneksi.php';
 
-// SECURITY HEADER
-header("X-Frame-Options: SAMEORIGIN");
-header("X-Content-Type-Options: nosniff");
-header("Referrer-Policy: strict-origin-when-cross-origin");
+/*
+|--------------------------------------------------------------------------
+| TIMEZONE
+|--------------------------------------------------------------------------
+*/
+date_default_timezone_set('Asia/Jakarta');
 
-// CEK LOGIN
-if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
+/*
+|--------------------------------------------------------------------------
+| SECURITY HEADERS
+|--------------------------------------------------------------------------
+*/
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('X-XSS-Protection: 1; mode=block');
+header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';");
+
+/*
+|--------------------------------------------------------------------------
+| MYSQL ERROR MODE
+|--------------------------------------------------------------------------
+*/
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+/*
+|--------------------------------------------------------------------------
+| SESSION VALIDATION
+|--------------------------------------------------------------------------
+*/
+if (
+    empty($_SESSION['login']) ||
+    $_SESSION['login'] !== true ||
+    empty($_SESSION['user_id'])
+) {
 
     session_unset();
     session_destroy();
 
-    header("Location: login.php");
+    header('Location: login.php');
     exit;
 }
 
-// SESSION TIMEOUT
+/*
+|--------------------------------------------------------------------------
+| SESSION TIMEOUT
+|--------------------------------------------------------------------------
+*/
 $timeout = 1800;
 
-if (isset($_SESSION['last_activity'])) {
+if (
+    isset($_SESSION['last_activity']) &&
+    (time() - $_SESSION['last_activity']) > $timeout
+) {
 
-    if ((time() - $_SESSION['last_activity']) > $timeout) {
+    session_unset();
+    session_destroy();
 
-        session_unset();
-        session_destroy();
-
-        header("Location: login.php?timeout=1");
-        exit;
-    }
+    header('Location: login.php?timeout=1');
+    exit;
 }
 
 $_SESSION['last_activity'] = time();
 
-// VALIDASI USER ID
-if (!isset($_SESSION['user_id'])) {
+/*
+|--------------------------------------------------------------------------
+| GENERATE KODE KATEGORI
+|--------------------------------------------------------------------------
+*/
+$kd_kat = 'K001';
 
-    session_unset();
-    session_destroy();
+$queryKode = mysqli_query(
+    $conn,
+    "SELECT MAX(kd_kat) AS max_code FROM categories"
+);
 
-    header("Location: login.php");
-    exit;
+if ($queryKode instanceof mysqli_result) {
+
+    $hasil = mysqli_fetch_assoc($queryKode);
+
+    if (!empty($hasil['max_code'])) {
+
+        $urutan = (int) substr($hasil['max_code'], 1);
+
+        $urutan++;
+
+        $kd_kat = 'K' . sprintf('%03d', $urutan);
+    }
 }
-?>
-<?php
-include "koneksi.php";
 
-$auto = mysqli_query($conn, "select max(kd_kat) as max_code from categories");
-$hasil = mysqli_fetch_array($auto);
-$code = $hasil['max_code'];
-if ($code == NULL) {
-    $urutan = 0;
-} else {
-    $urutan = (int) substr($code, 1, 3);
-}
-$urutan++;
-$huruf = "K";
-$kd_kat = $huruf . sprintf("%03s", $urutan);
+/*
+|--------------------------------------------------------------------------
+| SIMPAN DATA
+|--------------------------------------------------------------------------
+*/
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-if (isset($_POST['simpan'])) {
-    $nm_kat = $_POST['nm_kat'];
+    $nm_kat = trim($_POST['nm_kat'] ?? '');
 
-    $query = mysqli_query($conn, "INSERT INTO categories(kd_kat, category_name) VALUES ('$kd_kat', '$nm_kat')");
-    if ($query) {
-        echo "<script>alert('Data berhasil ditambahkan!')</script>";
-        header("refresh:0, kategori_produk.php");
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDASI INPUT
+    |--------------------------------------------------------------------------
+    */
+    if ($nm_kat === '') {
+
+        echo "<script>alert('Nama kategori wajib diisi!');</script>";
+    } elseif (mb_strlen($nm_kat) > 100) {
+
+        echo "<script>alert('Nama kategori terlalu panjang!');</script>";
     } else {
-        echo "<script>alert('Data gagal ditambahkan!')</script>";
-        header("refresh:0, kategori_produk.php");
+
+        /*
+        |--------------------------------------------------------------------------
+        | PREPARED STATEMENT
+        |--------------------------------------------------------------------------
+        */
+        $stmt = mysqli_prepare(
+            $conn,
+            "INSERT INTO categories (kd_kat, category_name)
+             VALUES (?, ?)"
+        );
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            'ss',
+            $kd_kat,
+            $nm_kat
+        );
+
+        $simpan = mysqli_stmt_execute($stmt);
+
+        mysqli_stmt_close($stmt);
+
+        if ($simpan) {
+
+            header('Location: kategori_produk.php?success=1');
+            exit;
+        } else {
+
+            echo "<script>alert('Data gagal ditambahkan!');</script>";
+        }
     }
 }
 ?>
@@ -103,6 +201,49 @@ if (isset($_POST['simpan'])) {
 
     <!-- Template Main CSS File -->
     <link href="assets/css/style.css" rel="stylesheet">
+    <style>
+        :root {
+            --main-font: Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--main-font);
+            letter-spacing: 0.2px;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        p,
+        a,
+        li,
+        table,
+        th,
+        td,
+        button,
+        input,
+        select,
+        textarea,
+        label,
+        span,
+        .card-title,
+        .nav-link,
+        .dropdown-item,
+        .breadcrumb,
+        .datatable-wrapper,
+        .datatable-table,
+        .datatable-input,
+        .datatable-selector {
+            font-family: inherit;
+        }
+
+        .logo span {
+            font-family: Helvetica, Arial, sans-serif !important;
+        }
+    </style>
 </head>
 
 <body>
@@ -129,8 +270,13 @@ if (isset($_POST['simpan'])) {
 
                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
                         <li class="dropdown-header">
-                            <h6><?php echo isset($_SESSION['name']) ? $_SESSION['name'] : 'User'; ?></h6>
-                            <span><?php echo isset($_SESSION['role']) ? $_SESSION['role'] : 'Role'; ?></span>
+                            <h6>
+                                <?= htmlspecialchars($_SESSION['name'] ?? 'User'); ?>
+                            </h6>
+
+                            <span>
+                                <?= htmlspecialchars($_SESSION['role'] ?? 'Role'); ?>
+                            </span>
                         </li>
                         <li>
                             <hr class="dropdown-divider" />
@@ -221,10 +367,19 @@ if (isset($_POST['simpan'])) {
                                 </div>
                                 <div class="col-12">
                                     <label for="nm_kat" class="form-label">Nama Kategori</label>
-                                    <input type="text" class="form-control" id="nm_kat" name="nm_kat" required>
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        id="nm_kat"
+                                        name="nm_kat"
+                                        maxlength="100"
+                                        autocomplete="off"
+                                        required>
                                 </div>
                                 <div class="text-center">
-                                    <button type="button" class="btn btn-warning"><a href="kategori_produk.php" style="color: black; text-decoration: none;">Kembali</a></button>
+                                    <a href="kategori_produk.php" class="btn btn-warning text-dark text-decoration-none">
+                                        Kembali
+                                    </a>
                                     <button type="reset" class="btn btn-secondary">Reset</button>
                                     <button type="submit" class="btn btn-success" name="simpan">Simpan</button>
                                 </div>

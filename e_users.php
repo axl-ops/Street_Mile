@@ -1,114 +1,170 @@
 <?php
-session_start();
 
+declare(strict_types=1);
+
+/* =========================
+   SESSION SECURITY
+========================= */
+session_set_cookie_params([
+    'lifetime' => 0,
+    'path' => '/',
+    'secure' => !empty($_SERVER['HTTPS']),
+    'httponly' => true,
+    'samesite' => 'Strict'
+]);
+
+session_start();
 require_once 'koneksi.php';
 
-// SECURITY HEADER
+/* =========================
+   SECURITY HEADERS
+========================= */
 header("X-Frame-Options: SAMEORIGIN");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 
-// CEK LOGIN
-if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
-
+/* =========================
+   AUTH CHECK
+========================= */
+if (empty($_SESSION['login']) || empty($_SESSION['user_id'])) {
     session_unset();
     session_destroy();
-
     header("Location: login.php");
     exit;
 }
 
-// SESSION TIMEOUT
+/* =========================
+   SESSION TIMEOUT
+========================= */
 $timeout = 1800;
 
-if (isset($_SESSION['last_activity'])) {
-
-    if ((time() - $_SESSION['last_activity']) > $timeout) {
-
-        session_unset();
-        session_destroy();
-
-        header("Location: login.php?timeout=1");
-        exit;
-    }
+if (!empty($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout) {
+    session_unset();
+    session_destroy();
+    header("Location: login.php?timeout=1");
+    exit;
 }
 
 $_SESSION['last_activity'] = time();
 
-// VALIDASI USER ID
-if (!isset($_SESSION['user_id'])) {
+/* =========================
+   XSS HELPER
+========================= */
+function e(string $str): string
+{
+    return htmlspecialchars($str, ENT_QUOTES, 'UTF-8');
+}
 
-    session_unset();
-    session_destroy();
+/* =========================
+   VALIDATE ID (SAFE)
+========================= */
+$id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
-    header("Location: login.php");
+if ($id <= 0) {
+    header("Location: users.php");
     exit;
 }
-?>
-<?php
-include "koneksi.php";
 
-$id   = $_GET['id'];
-$data = mysqli_query($conn, "SELECT * FROM users WHERE id='$id'");
-$users = mysqli_fetch_array($data);
+/* =========================
+   FETCH USER (PREPARED)
+========================= */
+$stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE id = ?");
+mysqli_stmt_bind_param($stmt, "i", $id);
+mysqli_stmt_execute($stmt);
 
+$result = mysqli_stmt_get_result($stmt);
+$users = mysqli_fetch_assoc($result);
+
+mysqli_stmt_close($stmt);
+
+if (!$users) {
+    header("Location: users.php");
+    exit;
+}
+
+/* =========================
+   UPDATE USER
+========================= */
 if (isset($_POST['update'])) {
 
-    $name      = mysqli_real_escape_string($conn, $_POST['name']);
-    $email     = mysqli_real_escape_string($conn, $_POST['email']);
-    $password  = $_POST['password'];
-    $role      = $_POST['role'];
-    $is_active = $_POST['is_active'];
+    $name      = trim($_POST['name'] ?? '');
+    $email     = trim($_POST['email'] ?? '');
+    $password  = $_POST['password'] ?? '';
+    $role      = $_POST['role'] ?? '';
+    $is_active = (int)($_POST['is_active'] ?? 1);
 
-    // cek email (kecuali email milik users ini sendiri)
-    $cek = mysqli_query($conn, "SELECT * FROM users 
-                                WHERE email='$email' 
-                                AND id!='{$id}'");
-
-    if (mysqli_num_rows($cek) > 0) {
-        echo "<script>
-                alert('Email sudah digunakan users lain!');
-                window.location='users.php';
-              </script>";
+    /* VALIDATION */
+    if ($name === '' || $email === '' || $role === '') {
+        echo "<script>alert('Field wajib diisi!');window.location='users.php';</script>";
         exit;
     }
 
-    // jika password diisi → update password
+    /* CHECK EMAIL DUPLICATE */
+    $check = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ? AND id != ?");
+    mysqli_stmt_bind_param($check, "si", $email, $id);
+    mysqli_stmt_execute($check);
+    mysqli_stmt_store_result($check);
+
+    if (mysqli_stmt_num_rows($check) > 0) {
+        mysqli_stmt_close($check);
+        echo "<script>alert('Email sudah digunakan!');window.location='users.php';</script>";
+        exit;
+    }
+
+    mysqli_stmt_close($check);
+
+    /* =========================
+       UPDATE QUERY
+    ========================= */
     if (!empty($password)) {
 
         $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
-        $query = mysqli_query($conn, "UPDATE users SET
-                    name='$name',
-                    email='$email',
-                    password='$password_hash',
-                    role='$role',
-                    is_active='$is_active'
-                    WHERE id='$id'
-                ");
+        $update = mysqli_prepare($conn, "
+            UPDATE users 
+            SET name=?, email=?, password=?, role=?, is_active=? 
+            WHERE id=?
+        ");
+
+        mysqli_stmt_bind_param(
+            $update,
+            "ssssii",
+            $name,
+            $email,
+            $password_hash,
+            $role,
+            $is_active,
+            $id
+        );
     } else {
 
-        // jika password kosong → jangan update password
-        $query = mysqli_query($conn, "UPDATE users SET
-                    name='$name',
-                    email='$email',
-                    role='$role',
-                    is_active='$is_active'
-                    WHERE id='$id'
-                ");
+        $update = mysqli_prepare($conn, "
+            UPDATE users 
+            SET name=?, email=?, role=?, is_active=? 
+            WHERE id=?
+        ");
+
+        mysqli_stmt_bind_param(
+            $update,
+            "sssii",
+            $name,
+            $email,
+            $role,
+            $is_active,
+            $id
+        );
     }
 
-    if ($query) {
-        echo "<script>
-                alert('User berhasil diupdate!');
-                window.location='users.php';
-              </script>";
+    if (mysqli_stmt_execute($update)) {
+        header("Location: users.php?success=1");
+        exit;
     } else {
-        echo "<script>
-                alert('User gagal diupdate!');
-                window.location='users.php';
-              </script>";
+        error_log("Update user error: " . mysqli_error($conn));
+        header("Location: users.php?error=1");
+        exit;
     }
+
+    mysqli_stmt_close($update);
 }
 ?>
 <!DOCTYPE html>
@@ -141,6 +197,28 @@ if (isset($_POST['update'])) {
 
     <!-- Template Main CSS File -->
     <link href="assets/css/style.css" rel="stylesheet">
+
+    <style>
+        html,
+        body {
+            font-family: Helvetica, Arial, sans-serif !important;
+            font-weight: 400;
+            letter-spacing: 0.2px;
+        }
+
+        /* force semua elemen ikut font body */
+        body * {
+            font-family: inherit !important;
+        }
+
+        /* optional: pastikan tombol & input tidak beda font di browser tertentu */
+        button,
+        input,
+        select,
+        textarea {
+            font-family: inherit !important;
+        }
+    </style>
 
 </head>
 

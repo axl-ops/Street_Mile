@@ -1,107 +1,157 @@
 <?php
-session_start();
 
+declare(strict_types=1);
+
+session_start();
 require_once 'koneksi.php';
 
-// SECURITY HEADER
+/* =========================
+   SECURITY HEADERS
+========================= */
 header("X-Frame-Options: SAMEORIGIN");
 header("X-Content-Type-Options: nosniff");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 
-// CEK LOGIN
-if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
-
+/* =========================
+   AUTH CHECK
+========================= */
+if (empty($_SESSION['login']) || empty($_SESSION['user_id'])) {
     session_unset();
     session_destroy();
-
     header("Location: login.php");
     exit;
 }
 
-// SESSION TIMEOUT
+/* =========================
+   SESSION TIMEOUT
+========================= */
 $timeout = 1800;
 
-if (isset($_SESSION['last_activity'])) {
-
-    if ((time() - $_SESSION['last_activity']) > $timeout) {
-
-        session_unset();
-        session_destroy();
-
-        header("Location: login.php?timeout=1");
-        exit;
-    }
-}
-
-$_SESSION['last_activity'] = time();
-
-// VALIDASI USER ID
-if (!isset($_SESSION['user_id'])) {
-
+if (!empty($_SESSION['last_activity']) && (time() - $_SESSION['last_activity']) > $timeout) {
     session_unset();
     session_destroy();
-
-    header("Location: login.php");
+    header("Location: login.php?timeout=1");
     exit;
 }
-?>
-<?php
-include "koneksi.php";
-$id = $_GET['id'];
-$query = mysqli_query($conn, "SELECT * FROM products WHERE id='$id'");
-$hasil = mysqli_fetch_array($query);
-if (isset($_POST['update'])) {
+$_SESSION['last_activity'] = time();
 
-    $nm_produk   = $_POST['nm_produk'];
-    $stok        = $_POST['stok'];
-    $min_stok    = $_POST['min_stok'];
-    $harga       = $_POST['harga'];
-    $id_kategori = $_POST['id_kategori'];
+/* =========================
+   XSS HELPER
+========================= */
+function e(string $v): string
+{
+    return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+}
 
-    $imgfile = $_FILES['gambar']['name'];
+/* =========================
+   VALID ID CHECK
+========================= */
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-    // kalau upload gambar baru
-    if ($imgfile != "") {
+if ($id <= 0) {
+    header("Location: produk.php?error=invalid_id");
+    exit;
+}
 
-        $tmp       = $_FILES['gambar']['tmp_name'];
-        $ext       = strtolower(pathinfo($imgfile, PATHINFO_EXTENSION));
-        $allowed   = ['jpg', 'jpeg', 'png', 'webp'];
+/* =========================
+   GET PRODUCT DATA (SAFE)
+========================= */
+$stmt = mysqli_prepare($conn, "SELECT * FROM products WHERE id = ?");
+mysqli_stmt_bind_param($stmt, "i", $id);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
+$hasil = mysqli_fetch_assoc($result);
+mysqli_stmt_close($stmt);
 
-        if (in_array($ext, $allowed)) {
+if (!$hasil) {
+    header("Location: produk.php?error=not_found");
+    exit;
+}
 
-            $imgnew = md5(time() . $imgfile) . "." . $ext;
-            move_uploaded_file($tmp, "produk_img/" . $imgnew);
+/* =========================
+   UPDATE HANDLER
+========================= */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
 
-            $update = mysqli_query($conn, "UPDATE products SET
-                category_id = '$id_kategori',
-                product_name = '$nm_produk',
-                stock = '$stok',
-                min_stock = '$min_stok',
-                price = '$harga',
-                gambar = '$imgnew'
-                WHERE id = '$id'
-            ");
-        } else {
-            echo "<script>alert('Format gambar tidak valid');</script>";
-            return;
-        }
-    } else {
-        // tanpa ganti gambar
-        $update = mysqli_query($conn, "UPDATE products SET
-            category_id = '$id_kategori',
-            product_name = '$nm_produk',
-            stock = '$stok',
-            min_stock = '$min_stok',
-            price = '$harga'
-            WHERE id = '$id'
-        ");
+    $nm_produk   = trim($_POST['nm_produk'] ?? '');
+    $stok        = (int)($_POST['stok'] ?? 0);
+    $min_stok    = (int)($_POST['min_stok'] ?? 0);
+    $harga       = (float)($_POST['harga'] ?? 0);
+    $id_kategori = (int)($_POST['id_kategori'] ?? 0);
+
+    if ($nm_produk === '' || $id_kategori <= 0) {
+        header("Location: e_produk.php?id=$id&error=empty");
+        exit;
     }
-    if ($update) {
-        echo "<script>alert('Data berhasil diubah!')</script>";
-        header("refresh:0, produk.php");
+
+    /* =========================
+       IMAGE HANDLING
+    ========================= */
+    $imgfile = $_FILES['gambar']['name'] ?? '';
+
+    if (!empty($imgfile)) {
+
+        $tmp = $_FILES['gambar']['tmp_name'];
+        $ext = strtolower(pathinfo($imgfile, PATHINFO_EXTENSION));
+        $allowed = ['jpg', 'jpeg', 'png', 'webp'];
+
+        if (!in_array($ext, $allowed)) {
+            header("Location: e_produk.php?id=$id&error=img_format");
+            exit;
+        }
+
+        $imgnew = md5(time() . $imgfile) . "." . $ext;
+        move_uploaded_file($tmp, "produk_img/" . $imgnew);
+
+        $stmt = mysqli_prepare($conn, "
+            UPDATE products 
+            SET category_id=?, product_name=?, stock=?, min_stock=?, price=?, gambar=? 
+            WHERE id=?
+        ");
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "isidisi",
+            $id_kategori,
+            $nm_produk,
+            $stok,
+            $min_stok,
+            $harga,
+            $imgnew,
+            $id
+        );
     } else {
-        echo "<script>alert('Data gagal diubah!')</script>";
-        header("refresh:0, produk.php");
+
+        $stmt = mysqli_prepare($conn, "
+            UPDATE products 
+            SET category_id=?, product_name=?, stock=?, min_stock=?, price=? 
+            WHERE id=?
+        ");
+
+        mysqli_stmt_bind_param(
+            $stmt,
+            "isidii",
+            $id_kategori,
+            $nm_produk,
+            $stok,
+            $min_stok,
+            $harga,
+            $id
+        );
+    }
+
+    /* =========================
+       EXECUTE
+    ========================= */
+    if (mysqli_stmt_execute($stmt)) {
+        mysqli_stmt_close($stmt);
+        header("Location: produk.php?success=1");
+        exit;
+    } else {
+        error_log("Update produk error: " . mysqli_error($conn));
+        mysqli_stmt_close($stmt);
+        header("Location: produk.php?error=1");
+        exit;
     }
 }
 ?>
@@ -135,6 +185,21 @@ if (isset($_POST['update'])) {
 
     <!-- Template Main CSS File -->
     <link href="assets/css/style.css" rel="stylesheet">
+
+    <style>
+        html,
+        body {
+            font-family: Helvetica, Arial, sans-serif !important;
+        }
+
+        body * {
+            font-family: inherit !important;
+        }
+
+        .logo span {
+            font-family: Helvetica, Arial, sans-serif !important;
+        }
+    </style>
 </head>
 
 <body>
