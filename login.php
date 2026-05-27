@@ -60,11 +60,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
           }
         } else {
           $_SESSION['login_attempt']++;
-          $error = "Email atau password salah.";
+          $error = "Incorrect email or password. Please try again.";
         }
       } else {
         $_SESSION['login_attempt']++;
-        $error = "Email atau password salah.";
+        $error = "Incorrect email or password. Please try again.";
       }
 
       mysqli_stmt_close($stmt);
@@ -94,33 +94,276 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
   <link href="assets/css/style.css" rel="stylesheet">
 
   <style>
-    @font-face {
-      font-family: 'FuturaHeavyOblique';
-      src: url('assets/font/FuturaHeavyOblique.ttf') format('truetype');
+    /* =========================
+   GLOBAL RESET & SECURITY
+========================= */
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
     }
 
     body {
-      background: url("assets/img/Login-Background.jpg") no-repeat center center fixed;
+      margin: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+
+      font-family: Arial, sans-serif;
+
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+
+      background: url("assets/img/Login-Background1.jpg") no-repeat center center fixed;
       background-size: cover;
-      background-attachment: fixed;
+      background-position: center;
+      background-repeat: no-repeat;
     }
 
+    /* DARK OVERLAY (SECURITY + FOCUS LOGIN) */
     body::before {
       content: "";
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.55);
-      z-index: -1;
+
+      z-index: 0;
+      pointer-events: none;
     }
 
-    .logo-text {
-      font-family: 'FuturaHeavyOblique';
-      font-size: 32px;
-      font-style: italic;
-      font-weight: 900;
+    /* =========================
+   LOGO LOGIN
+========================= */
+
+    .logo-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      text-decoration: none;
+      position: relative;
+      z-index: 2;
+    }
+
+    .login-logo {
+      width: 100%;
+      max-width: 420px;
+      height: auto;
+      display: block;
+      object-fit: contain;
+      user-select: none;
+      -webkit-user-drag: none;
+
+      filter: drop-shadow(0px 4px 12px rgba(0, 0, 0, 0.35));
+
+      transition: transform 0.3s ease, filter 0.3s ease;
+      will-change: transform;
+    }
+
+    @media (hover: hover) {
+      .login-logo:hover {
+        transform: scale(1.03);
+        filter: drop-shadow(0px 6px 18px rgba(0, 0, 0, 0.45));
+      }
+    }
+
+    @media (max-width: 768px) {
+      .login-logo {
+        max-width: 320px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .login-logo {
+        max-width: 240px;
+      }
+    }
+
+    /* =========================
+   TEXT LOGIN
+========================= */
+
+    a.logo .logo-text {
+      font-family: "Futura Heavy", sans-serif !important;
+      font-size: 32px !important;
+      font-weight: 900 !important;
+      font-style: normal !important;
       color: #ffffff !important;
       letter-spacing: 1px;
       margin-left: 8px;
+      line-height: 1;
+      text-shadow: 0px 2px 8px rgba(0, 0, 0, 0.35);
+    }
+
+    @media (max-width: 768px) {
+      a.logo .logo-text {
+        font-size: 26px !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      a.logo .logo-text {
+        font-size: 22px !important;
+      }
+    }
+
+    /* =========================
+   🔥 GLASSMORPHISM LOGIN CARD
+========================= */
+
+    .card {
+      position: relative;
+      z-index: 2;
+
+      border-radius: 18px;
+
+      /* GLASS EFFECT */
+      background: rgba(255, 255, 255, 0.10);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+
+      border: 1px solid rgba(255, 255, 255, 0.25);
+
+      box-shadow:
+        0 10px 40px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+
+      overflow: hidden;
+
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    /* Hover Card */
+    @media (hover: hover) {
+      .card:hover {
+        transform: translateY(-3px);
+        box-shadow:
+          0 16px 60px rgba(0, 0, 0, 0.45),
+          inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      }
+    }
+
+    /* =========================
+   CARD BODY
+========================= */
+
+    .card-body {
+      padding: 32px;
+    }
+
+    @media (max-width: 480px) {
+      .card-body {
+        padding: 24px;
+      }
+    }
+
+    /* =========================
+   INPUT PREMIUM
+========================= */
+
+    .form-control {
+      border-radius: 10px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+
+      background: rgba(255, 255, 255, 0.85);
+      color: #1f1f1f;
+      font-size: 15px;
+
+      transition: 0.2s ease;
+      box-shadow: none;
+    }
+
+    .form-control::placeholder {
+      color: #9c9c9c;
+    }
+
+    .form-control:focus {
+      border-color: #7b00a8;
+      outline: none;
+
+      box-shadow: 0 0 0 0.18rem rgba(123, 0, 168, 0.25);
+    }
+
+    /* Autofill Fix */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+      -webkit-text-fill-color: #1f1f1f;
+      transition: background-color 9999s ease-in-out 0s;
+    }
+
+    /* =========================
+   BUTTON PREMIUM
+========================= */
+
+    .btn-primary {
+      background: #7b00a8;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      width: 100%;
+
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: 0.3px;
+
+      color: #ffffff !important;
+      cursor: pointer;
+
+      transition: 0.25s ease;
+
+      box-shadow: 0px 4px 15px rgba(123, 0, 168, 0.25);
+    }
+
+    @media (hover: hover) {
+      .btn-primary:hover {
+        background: #9400cc;
+        transform: translateY(-1px);
+        box-shadow: 0px 8px 24px rgba(123, 0, 168, 0.35);
+      }
+    }
+
+    .btn-primary:active {
+      transform: scale(0.99);
+    }
+
+    .btn-primary:focus {
+      box-shadow: 0 0 0 0.18rem rgba(123, 0, 168, 0.25);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    /* =========================
+   CREDITS
+========================= */
+
+    .credits {
+      text-align: center;
+      margin-top: 18px;
+    }
+
+    .credits a:hover {
+      text-decoration: underline;
+      opacity: 0.95;
+    }
+
+    /* =========================
+   FIX CLICK LAYER
+========================= */
+
+    .logo-container,
+    .credits {
+      position: relative;
+      z-index: 2;
     }
 
     .credits a {
@@ -128,12 +371,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
       font-weight: 900;
       color: #ffffff !important;
       text-decoration: none;
+      text-shadow: 0px 2px 8px rgba(0, 0, 0, 0.4);
+      cursor: pointer;
     }
 
-    .card {
-      border-radius: 12px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(2px);
+    .card-title {
+      color: rgba(255, 255, 255, 0.9) !important;
+      text-shadow: 0px 2px 8px rgba(0, 0, 0, 0.35);
+      letter-spacing: 0.5px;
+    }
+
+    /* =========================
+   ACCESSIBILITY
+========================= */
+
+    @media (prefers-reduced-motion: reduce) {
+
+      *,
+      *::before,
+      *::after {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+      }
     }
   </style>
 </head>
@@ -153,7 +413,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
               <!-- Logo -->
               <div class="d-flex justify-content-center py-4">
                 <a href="login.php" class="logo d-flex align-items-center w-auto">
-                  <img src="assets/img/Street Mile Logo login1.png" alt="Logo">
+                  <img
+                    src="assets/img/Logo Login1.svg"
+                    alt="Street Mile Logo"
+                    loading="lazy"
+                    decoding="async">
                   <span class="d-none d-lg-block logo-text">Street Mile</span>
                 </a>
               </div>
@@ -197,17 +461,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
               <div class="credits text-white">
                 Designed by
-                <a href="https://www.instagram.com/axelwavehassle/" target="_blank">
+                <a href="https://www.instagram.com/axelwavehassle/" target="_blank" rel="noopener noreferrer">
                   Axel Indra Yudha
                 </a>
               </div>
-
+              </a>
             </div>
 
           </div>
-        </div>
 
-      </section>
+        </div>
+    </div>
+
+    </section>
 
     </div>
   </main>
