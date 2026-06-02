@@ -168,6 +168,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
    LOGO LOGIN
 ========================= */
 
+    .logo img.login-logo {
+      max-height: none !important;
+      height: 45px !important;
+      width: auto !important;
+    }
+
     .logo-container {
       display: flex;
       justify-content: center;
@@ -179,37 +185,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     }
 
     .login-logo {
-      width: 100%;
-      max-width: 420px;
-      height: auto;
       display: block;
+
+      height: 110px;
+      width: auto;
+
       object-fit: contain;
+
       user-select: none;
       -webkit-user-drag: none;
 
-      filter: drop-shadow(0px 4px 12px rgba(0, 0, 0, 0.35));
+      filter:
+        brightness(0.85) contrast(1.15) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.20));
 
-      transition: transform 0.3s ease, filter 0.3s ease;
-      will-change: transform;
-    }
-
-    @media (hover: hover) {
-      .login-logo:hover {
-        transform: scale(1.03);
-        filter: drop-shadow(0px 6px 18px rgba(0, 0, 0, 0.45));
-      }
-    }
-
-    @media (max-width: 768px) {
-      .login-logo {
-        max-width: 320px;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .login-logo {
-        max-width: 240px;
-      }
     }
 
     /* =========================
@@ -218,14 +206,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
     a.logo .logo-text {
       font-family: "Futura Heavy", sans-serif !important;
-      font-size: 32px !important;
+      font-size: 34px !important;
       font-weight: 900 !important;
       font-style: normal !important;
-      color: #ffffff !important;
-      letter-spacing: 1px;
-      margin-left: 8px;
+
+      color: rgba(255, 255, 255, 0.98) !important;
+
+      letter-spacing: 1.2px;
+      margin-left: 10px;
       line-height: 1;
-      text-shadow: 0px 2px 8px rgba(0, 0, 0, 0.35);
+
+      text-shadow:
+        0 2px 10px rgba(0, 0, 0, 0.35);
+
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
     }
 
     @media (max-width: 768px) {
@@ -404,9 +400,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     }
 
     .card-title {
-      color: rgba(255, 255, 255, 0.9) !important;
+      color: #ffffff !important;
       text-shadow: 0px 2px 8px rgba(0, 0, 0, 0.35);
       letter-spacing: 0.5px;
+    }
+
+    .card-body p {
+      color: rgba(255, 255, 255, 0.85) !important;
+    }
+
+    .form-label {
+      color: rgba(255, 255, 255, 0.90) !important;
+      font-weight: 500;
     }
 
     /* =========================
@@ -440,10 +445,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
               <!-- Logo -->
               <div class="d-flex justify-content-center py-4">
-                <a href="login.php" class="logo d-flex align-items-center w-auto">
+                <a class="logo d-flex align-items-center w-auto">
                   <img
                     src="assets/img/Logo Login1.svg"
                     alt="Street Mile Logo"
+                    class="login-logo"
                     loading="lazy"
                     decoding="async">
                   <span class="d-none d-lg-block logo-text">Street Mile</span>
@@ -492,7 +498,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                   Axel Indra Yudha
                 </a>
               </div>
-              </a>
+
             </div>
 
           </div>
