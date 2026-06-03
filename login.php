@@ -2,15 +2,46 @@
 
 declare(strict_types=1);
 
+/* =========================
+   SECURE SESSION COOKIE
+========================= */
+$isHttps =
+  (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+  || ($_SERVER['SERVER_PORT'] ?? 80) == 443;
+
+session_set_cookie_params([
+  'lifetime' => 0,
+  'path'     => '/',
+  'domain'   => '',
+  'secure'   => $isHttps,
+  'httponly' => true,
+  'samesite' => 'Lax'
+]);
+
 session_start();
+
+/* =========================
+   CSRF TOKEN
+========================= */
+if (empty($_SESSION['csrf_token'])) {
+  $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
 
 /* =========================
    SECURITY HEADERS
 ========================= */
-header("X-Frame-Options: SAMEORIGIN");
-header("X-Content-Type-Options: nosniff");
-header("Referrer-Policy: strict-origin-when-cross-origin");
+header('X-Frame-Options: SAMEORIGIN');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
 
+header(
+  'Permissions-Policy: camera=(), microphone=(), geolocation=()'
+);
+
+/* Prevent Browser Caching */
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
 /* =========================
    DATABASE
 ========================= */
@@ -36,6 +67,16 @@ $error = "";
    LOGIN PROCESS
 ========================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
+
+  /* =========================
+     CSRF VALIDATION
+  ========================= */
+  if (
+    !isset($_POST['csrf_token']) ||
+    !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])
+  ) {
+    die('Invalid request.');
+  }
 
   $email = trim($_POST['email'] ?? '');
   $password = trim($_POST['password'] ?? '');
@@ -72,6 +113,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
             session_regenerate_id(true);
 
+            /* =========================
+                NEW CSRF TOKEN
+         ========================= */
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
             $_SESSION['login_attempt'] = 0;
 
             $_SESSION['login'] = true;
@@ -84,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             header("Location: index.php");
             exit;
           } else {
-            $error = "Akun tidak aktif.";
+            $error = "Invalid login details. Please check your credentials and try again.";
           }
         } else {
           $_SESSION['login_attempt']++;
@@ -471,6 +517,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                   <?php endif; ?>
 
                   <form method="POST" class="row g-3" autocomplete="off">
+
+                    <input
+                      type="hidden"
+                      name="csrf_token"
+                      value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+
                     <div class="col-12">
                       <label class="form-label">Email</label>
                       <input type="email" name="email" class="form-control" required autocomplete="off">
