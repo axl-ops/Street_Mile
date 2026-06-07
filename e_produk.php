@@ -251,43 +251,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
 
         <ul class="sidebar-nav" id="sidebar-nav">
 
+            <!-- Dashboard -->
             <li class="nav-item">
-                <a class="nav-link " href="index.php">
-                    <i class="bi bi-grid"></i>
+                <a class="nav-link collapsed" href="index.php">
+                    <i class="bi bi-speedometer2"></i>
                     <span>Dashboard</span>
                 </a>
-            </li><!-- End Dashboard Nav -->
+            </li>
 
+            <!-- Kategori Produk -->
             <li class="nav-item">
                 <a class="nav-link collapsed" href="kategori_produk.php">
-                    <i class="bi bi-person"></i>
+                    <i class="bi bi-tags"></i>
                     <span>Kategori Produk</span>
                 </a>
-            </li><!-- End Profile Page Nav -->
+            </li>
 
+            <!-- Data Produk (AKTIF) -->
             <li class="nav-item">
-                <a class="nav-link collapsed" href="produk.php">
-                    <i class="bi bi-question-circle"></i>
+                <a class="nav-link" href="produk.php">
+                    <i class="bi bi-box-seam"></i>
                     <span>Data Produk</span>
                 </a>
-            </li><!-- End F.A.Q Page Nav -->
+            </li>
 
+            <!-- Laporan -->
             <li class="nav-item">
                 <a class="nav-link collapsed" href="laporan.php">
-                    <i class="bi bi-envelope"></i>
+                    <i class="bi bi-bar-chart-line"></i>
                     <span>Laporan</span>
                 </a>
-            </li><!-- End Contact Page Nav -->
+            </li>
 
+            <!-- Manajemen User -->
             <li class="nav-item">
                 <a class="nav-link collapsed" href="users.php">
-                    <i class="bi bi-card-list"></i>
+                    <i class="bi bi-people"></i>
                     <span>Manajemen User</span>
                 </a>
-            </li><!-- End Register Page Nav -->
+            </li>
+
         </ul>
 
-    </aside><!-- End Sidebar-->
+    </aside><!-- End Sidebar -->
 
     <main id="main" class="main">
 
