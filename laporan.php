@@ -92,25 +92,47 @@ $total_stok_kritis = safeCount(
 
   <!-- Template Main CSS File -->
   <link href="assets/css/style.css" rel="stylesheet">
-
   <style>
     :root {
       --main-font: Helvetica, Arial, sans-serif;
     }
 
-    html,
     body {
       font-family: var(--main-font);
+      letter-spacing: 0.2px;
     }
 
-    body * {
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    p,
+    a,
+    li,
+    table,
+    th,
+    td,
+    button,
+    input,
+    select,
+    textarea,
+    label,
+    span,
+    .card-title,
+    .nav-link,
+    .dropdown-item,
+    .breadcrumb,
+    .datatable-wrapper,
+    .datatable-table,
+    .datatable-input,
+    .datatable-selector {
       font-family: inherit;
     }
 
-    /* FIX khusus logo store */
-    .logo,
     .logo span {
-      font-family: var(--main-font);
+      font-family: Helvetica, Arial, sans-serif !important;
     }
   </style>
 </head>
